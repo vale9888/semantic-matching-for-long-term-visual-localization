@@ -28,7 +28,7 @@ The executive summary of the proposed method and a detailed explanation of the w
 <a name="dataset"/>
 
 ## Dataset
-All experiments are performed on the Extended CMU Seasons dataset available at https://www.visuallocalization.net/datasets/. The dataset consists of several slices (independent image subsets, each consisting of several collections of images of the same route, taken during different seasons and visual conditions). Please refer to that page for a comprehensive explanation of the dataset.
+All experiments are performed on the Extended CMU Seasons dataset (see _Badino et al., The CMU Visual Localization Data Set, 2011_ and _Sattler et al., Benchmarking 6DOF Outdoor Visual Localization in Changing Conditions, 2018_ ) available at https://www.visuallocalization.net/datasets/. The dataset consists of several slices (independent image subsets, each consisting of several collections of images of the same route, taken during different seasons and visual conditions). Please refer to the dataset webpage for a comprehensive explanation of the formats and contents.
 
 <a name="installation"/>.
 
