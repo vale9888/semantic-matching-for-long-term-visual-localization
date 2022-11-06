@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import os
 from fine_grained_segmentation.utils.misc import get_global_opts
 global_opts = get_global_opts()

@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import utils.joint_transforms as joint_transforms
 from fine_grained_segmentation.utils.misc import im_to_ext_name
 from fine_grained_segmentation.clustering.clustering import preprocess_features
