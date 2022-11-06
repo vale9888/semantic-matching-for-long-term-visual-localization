@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import os
 import re
 import numpy as np
