@@ -19,7 +19,7 @@ from fine_grained_segmentation.datasets import merged, correspondences
 from fine_grained_segmentation.models import model_configs
 from fine_grained_segmentation.utils.misc import check_mkdir, AverageMeter, freeze_bn, get_global_opts, rename_keys_to_match, \
     get_latest_network_name, clean_log_before_continuing, load_resnet101_weights, get_network_name_from_iteration
-from utils.validator import CorrValidator
+from fine_grained_segmentation.utils.validator import CorrValidator
 from fine_grained_segmentation.layers.feature_loss import FeatureLoss
 from fine_grained_segmentation.layers.cluster_correspondence_loss import ClusterCorrespondenceLoss
 from fine_grained_segmentation.clustering import clustering
