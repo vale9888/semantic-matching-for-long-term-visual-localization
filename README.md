@@ -7,9 +7,9 @@ A comprehensive repository to perform visual localization in presence of visual 
  
 ### Contents
 - [Description](#description)
-- [Resources] (#resources)
+- [Resources](#resources)
 - [Dataset](#dataset)
-- [Installation] (#installation)
+- [Installation](#installation)
 - [Usage](#usage)
 - [Demo](#demo)
 - [Authors](#authors)
