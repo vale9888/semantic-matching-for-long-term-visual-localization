@@ -23,7 +23,7 @@ Visual Localization, 2017_.
 <a name="resources"/>
 
 ## Resources
-The executive summary of the proposed method and a detailed explanation of the work and performed experiments can be found on [PoliTesi](http://hdl.handle.net/10589/191937).
+The executive summary of the proposed method and a detailed explanation of the work and performed experiments can be found on [POLITesi](http://hdl.handle.net/10589/191937).
 
 <a name="dataset"/>
 
