@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 from fine_grained_segmentation.models import pspnet
 import torchvision.transforms as standard_transforms
 import fine_grained_segmentation.utils.transforms as extended_transforms

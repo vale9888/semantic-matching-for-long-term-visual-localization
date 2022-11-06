@@ -5,6 +5,10 @@
 # URL:      http://kazuto1011.github.io
 # Created:  2017-11-19
 
+# Used in https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
+
 import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo

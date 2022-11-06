@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 from math import sqrt
 from train_with_clustering import train_with_clustering_experiment
 # Template for running several experiments
