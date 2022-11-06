@@ -7,9 +7,9 @@ A comprehensive repository to perform visual localization in presence of visual 
  
 ### Contents
 - [Description](#description)
-- [Resources] (#resources)
+- [Resources](#resources)
 - [Dataset](#dataset)
-- [Installation] (#installation)
+- [Installation](#installation)
 - [Usage](#usage)
 - [Demo](#demo)
 - [Authors](#authors)
@@ -31,6 +31,9 @@ A full explanation of the proposed method and performed experiments can be found
 <a name="installation"/>.
 
 ## Installation
+- follow the instructions from https://github.com/maunzzz/fine-grained-segmentation-networks to set up the fine grained segmentation network. We have used their pre-trained network (CMU dataset).
+- run the `\experiments\setup.py` algorithm to save segmentations for the slice you intend to analyse (Warning: large memory consumption)
+
 
 <a name="usage"/>
 
