@@ -1,7 +1,8 @@
 # Originally from: https://github.com/facebookresearch/deepcluster
 # This source code is licensed under the license found in the
 # LICENSE file found in that repository (Attribution-NonCommercial 4.0 International)
-# Modified
+# Modified in https://github.com/maunzzz/fine-grained-segmentation-networks,
+# license: Attribution-NonCommercial 4.0 International.
 
 import time
 import faiss
