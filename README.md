@@ -15,26 +15,33 @@ A comprehensive repository to perform visual localization in presence of visual 
 - [Authors](#authors)
 
 <a name="description"/>
-# Description 
+
+## Description 
 The repo includes functionality to perform visual localization, 
 
 <a name="resources"/>
-# Resources
+
+## Resources
 A full explanation of the proposed method and performed experiments can be found in ... . The executive summary can be found here ...
 
 <a name="dataset"/>
-# Dataset
+
+## Dataset
 
 <a name="installation"/>.
-# Installation
+
+## Installation
 
 <a name="usage"/>
-# Usage
+
+## Usage
 
 
 <a name="demo"/>
-# Demo
+
+## Demo
 
 <a name="authors"/>
-# Authors
+
+## Authors
 This project was developed by Valentina Sgarbossa [[Email](mailto:valentina.sgarbossa@mail.polimi.it)][[Github](https://github.com/vale9888)] under the supervision of Antonino Maria Rizzo [[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)] and Luca Magri [[Email](mailto:luca.magri@polimi.it)][[Webpage](https://magrilu.github.io/)], in the Department of Electronics, Informatics and Bioengineering at Politecnico di Milano.
