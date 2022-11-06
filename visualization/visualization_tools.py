@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import os
 from scipy.spatial.transform import Rotation
 
+def rgb_to_hex(rgb):
+    return '#%02x%02x%02x' % tuple(rgb)
+
 
 def show_kp(img_path, pts, spatially_consistent=None, semantically_consistent=None, label=None, out_path=None,
             col=None, alpha=1):
