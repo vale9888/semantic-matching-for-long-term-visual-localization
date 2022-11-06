@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import os
 import PIL.Image
 import numpy as np
@@ -24,7 +27,7 @@ def convert_folder(in_folder, out_folder, label_mapping):
         out_lbl_im.save(os.path.join(out_folder, in_file), "PNG")
 
 
-mapillary_path = '/media/user/Data/mapillary-vistas-dataset_public_v1.0/'
+mapillary_path = '/media/user/data/mapillary-vistas-dataset_public_v1.0/'
 
 ignore_ind = 255
 map_to_cs = {0: ignore_ind, 1: ignore_ind, 2: ignore_ind, 3: 13, 4: ignore_ind, 5: ignore_ind, 6: 12, 7: ignore_ind, 8: 7, 9: ignore_ind, 10: ignore_ind, 11: ignore_ind, 12: ignore_ind,

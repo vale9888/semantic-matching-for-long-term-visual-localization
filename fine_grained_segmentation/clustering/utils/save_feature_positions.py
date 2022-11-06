@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import fine_grained_segmentation.datasets.dataset_configs as data_configs
 from fine_grained_segmentation.utils.misc import check_mkdir, im_to_ext_name
 import os

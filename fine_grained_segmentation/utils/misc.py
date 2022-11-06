@@ -1,3 +1,6 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import os
 import json
 from math import ceil
@@ -15,7 +18,7 @@ from collections import OrderedDict
 from PIL import Image
 import colorsys
 
-root = os.path.join(os.path.dirname(__file__), '..')
+root = os.path.join(os.path.dirname(__file__), '../..')
 
 
 def get_root():

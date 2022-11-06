@@ -1,21 +1,21 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+# Modified
+
 import matplotlib.pyplot as plt
 import os
 import numpy as np
 import torch
 from PIL import Image
 import torchvision.transforms as standard_transforms
-from torch.autograd import Variable
 import numbers
 import torchvision.transforms.functional as F
-import h5py
 import scipy.io as sio
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 # import context
-from utils.misc import check_mkdir
+from fine_grained_segmentation.utils.misc import check_mkdir
 import utils.joint_transforms as joint_transforms
-import matplotlib
-import matplotlib.cm as cm
 
 
 def create_interpol_weights(wsize, sliding_transform_step):

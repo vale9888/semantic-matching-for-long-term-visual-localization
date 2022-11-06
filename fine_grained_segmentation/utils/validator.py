@@ -1,13 +1,16 @@
+# Script originally from https://github.com/maunzzz/fine-grained-segmentation-networks,
+# licensed as in the LICENSE file of the above repository (Attribution-NonCommercial 4.0 International).
+
 import os
 import numpy as np
 import torch
 import pickle
 from PIL import Image
-from utils.misc import AverageMeter, evaluate_incremental, freeze_bn
-from utils.segmentor import Segmentor, FeatureExtractor
+from fine_grained_segmentation.utils.misc import AverageMeter, evaluate_incremental, freeze_bn
+from fine_grained_segmentation.utils.segmentor import Segmentor, FeatureExtractor
 import torchvision.transforms.functional as F
-from clustering.cluster_tools import assign_cluster_ids_to_correspondence_points
-from clustering.clustering import preprocess_features
+from fine_grained_segmentation.clustering.cluster_tools import assign_cluster_ids_to_correspondence_points
+from fine_grained_segmentation.clustering.clustering import preprocess_features
 
 
 class Validator():
