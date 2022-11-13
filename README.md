@@ -11,7 +11,6 @@ A comprehensive repository to perform visual localization in presence of visual 
 - [Dataset](#dataset)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Demo](#demo)
 - [Authors](#authors)
 
 <a name="description"/>
@@ -42,10 +41,6 @@ All experiments are performed on the Extended CMU Seasons dataset (see _Badino e
 
 ## Usage
 You may find code for the main experiments of our work in the folder `/experiments`. Run these individually to perform the experiments.
-
-<a name="demo"/>
-
-## Demo
 
 <a name="authors"/>
 
