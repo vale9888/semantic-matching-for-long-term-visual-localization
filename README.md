@@ -5,7 +5,7 @@ A comprehensive repository to perform visual localization in presence of visual 
 | ----- | ---- | ---- |
 | ![Licence](https://img.shields.io/badge/Licence-MIT-orange) |  ![Python](https://img.shields.io/badge/Python-yellow)| ![Pytorch](https://img.shields.io/badge/Pytorch-1.8.1-brightgreen) ![Flask](https://img.shields.io/badge/Flask-2.0.0-brightgreen) ![Streamlit](https://img.shields.io/badge/Streamlit-0.82.0-brightgreen) ![Pandas](https://img.shields.io/badge/Pandas-1.2.4-brightgreen)  -->
 
-<embed src="Localization.pdf" width="800px" height="600px" />
+<embed src="Localization.pdf" />
  
 ### Contents
 - [Description](#description)
