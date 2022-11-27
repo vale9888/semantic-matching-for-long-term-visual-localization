@@ -5,7 +5,9 @@ A comprehensive repository to perform visual localization in presence of visual 
 | ----- | ---- | ---- |
 | ![Licence](https://img.shields.io/badge/Licence-MIT-orange) |  ![Python](https://img.shields.io/badge/Python-yellow)| ![Pytorch](https://img.shields.io/badge/Pytorch-1.8.1-brightgreen) ![Flask](https://img.shields.io/badge/Flask-2.0.0-brightgreen) ![Streamlit](https://img.shields.io/badge/Streamlit-0.82.0-brightgreen) ![Pandas](https://img.shields.io/badge/Pandas-1.2.4-brightgreen)  -->
 
-![Image text](Localization.pdf)
+<p align="left">
+  <img height="400" src="localization.jpg">
+</p>
  
 ### Contents
 - [Description](#description)
@@ -24,7 +26,7 @@ Visual Localization, 2017_.
 <a name="resources"/>
 
 ## Resources
-The executive summary of the proposed method and a detailed explanation of the work and performed experiments can be found on [POLITesi](http://hdl.handle.net/10589/191937).
+This work was realised as part of Valentina Sgarbossa's Master Thesis project _Visual localization in presence of match scarcity_. The executive summary of the proposed method and a detailed explanation of the work and performed experiments can be found on [POLITesi](http://hdl.handle.net/10589/191937).
 
 <a name="dataset"/>
 
@@ -42,7 +44,7 @@ All experiments are performed on the Extended CMU Seasons dataset (see _Badino e
 <a name="usage"/>
 
 ## Usage
-You may find code for the main experiments of our work in the folder `/experiments`. Run these individually to perform the experiments.
+You may find code for the main experiments of our work in the folder `/experiments`. Run these individually to perform the experiments described in the thesis.
 
 <a name="authors"/>
 
