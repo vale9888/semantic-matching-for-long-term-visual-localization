@@ -25,7 +25,7 @@ from pose_estimation.RANSAC_custom import p3p_biased_RANSAC, p3p_robust_biased_s
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_images_binary
 
 
-def get_stats(query_names, k, slicepath, slice, savepath, debug_mode, scores_mode, save_scores=True, ratio_threshold=0.2, height=768, width=1024, window=15, largest_score=False):
+def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, height=768, width=1024, window=15, largest_score=False):
     """
     Comparison of variations of our strategy. We include
     - a version with k=2
@@ -79,88 +79,86 @@ def get_stats(query_names, k, slicepath, slice, savepath, debug_mode, scores_mod
         # endregion
 
         # region (2) Set up matches
+        flann_matcher = cv.FlannBasedMatcher(dict(algorithm=1, trees=5), dict(checks=50))
+        kplus1_nearest_matches = flann_matcher.knnMatch(q_descriptors.astype(np.float32),
+                                                        db_descriptors.astype(np.float32),
+                                                        k=k + 1)
 
-        if not save_scores or not os.path.exists(os.path.join(slicepath, 'semantic_scores', query_name[:-4]+'.txt') ):
-            flann_matcher = cv.FlannBasedMatcher(dict(algorithm=1, trees=5), dict(checks=50))
-            kplus1_nearest_matches = flann_matcher.knnMatch(q_descriptors.astype(np.float32),
-                                                            db_descriptors.astype(np.float32),
-                                                            k=k + 1)
+        gsmc_scores = 0
+        matches_kNN_5x5_all = []
+        matches_kNN_15x15_all = []
+        matches_kNN_5x5_largest = []
+        matches_kNN_15x15_largest = []
+        matches_1NN_15x15 = []
 
-            gsmc_scores = 0
-            matches_kNN_5x5_all = []
-            matches_kNN_15x15_all = []
-            matches_kNN_5x5_largest = []
-            matches_kNN_15x15_largest = []
-            matches_1NN_15x15 = []
+        all_ratios_kNN_15x15_all = []
+        all_ratios_kNN_15x15_largest = []
+        ratios_1NN_15x15 = []
+        all_ratios_kNN_5x5_all = []
+        all_ratios_kNN_5x5_largest = []
 
-            all_ratios_kNN_15x15_all = []
-            all_ratios_kNN_15x15_largest = []
-            ratios_1NN_15x15 = []
-            all_ratios_kNN_5x5_all = []
-            all_ratios_kNN_5x5_largest = []
+        for qkp_idx in kp_priority:
 
-            for qkp_idx in kp_priority:
+            m = kplus1_nearest_matches[qkp_idx][:-1]
+            ratios = []
+            is5x5 = []
 
-                m = kplus1_nearest_matches[qkp_idx][:-1]
-                ratios = []
-                is5x5 = []
+            for neighbor_idx, putative_match in enumerate(m):
 
-                for neighbor_idx, putative_match in enumerate(m):
+                qkp_x = min(round(qkp[qkp_idx][0]), width-1)
+                qkp_y = min(round(qkp[qkp_idx][1]), height-1)
 
-                    qkp_x = min(round(qkp[qkp_idx][0]), width-1)
-                    qkp_y = min(round(qkp[qkp_idx][1]), height-1)
+                sem = full3Dpoints[db_p3D_ids[putative_match.trainIdx]].semantic_label
 
-                    sem = full3Dpoints[db_p3D_ids[putative_match.trainIdx]].semantic_label
+                if (window < qkp_x < width - window and window < qkp_y < height-window and \
+                        sem in query_mask[qkp_y - window:qkp_y + window,qkp_x - window:qkp_x + window]) or \
+                        not( window < qkp_x < width - window and window < qkp_y < height-window):
 
-                    if (window < qkp_x < width - window and window < qkp_y < height-window and \
-                            sem in query_mask[qkp_y - window:qkp_y + window,qkp_x - window:qkp_x + window]) or \
-                            not( window < qkp_x < width - window and window < qkp_y < height-window):
-
-                        score, _, _, totPointCounts, _ = GSMC_score(qkp[qkp_idx], db_p3D_ids[putative_match.trainIdx],
-                                                                    full3Dpoints, g_direction, camera_matrix,
-                                                                    dist_coefs, query_mask, slicepath, z0=z0, all_pids=all_pids, all_p3D=all_p3D)#, use_covisibility=True, img_data=img_data)
+                    score, _, _, totPointCounts, _ = GSMC_score(qkp[qkp_idx], db_p3D_ids[putative_match.trainIdx],
+                                                                full3Dpoints, g_direction, camera_matrix,
+                                                                dist_coefs, query_mask, slicepath, z0=z0, all_pids=all_pids, all_p3D=all_p3D)#, use_covisibility=True, img_data=img_data)
 
 
-                        gsmc_scores += 1
-                        if gsmc_scores % 100 == 0:
-                            print("Computed %d scores " % (gsmc_scores))
+                    gsmc_scores += 1
+                    if gsmc_scores % 100 == 0:
+                        print("Computed %d scores " % (gsmc_scores))
 
-                        if totPointCounts > 0: # and score / totPointCounts > ratio_threshold:
-                            ratios.append(score) #/ totPointCounts)
-                        else:
-                            ratios.append(0)
-
-                        if (5 < qkp_x < width - 5 and 5 < qkp_y < height - 5 and \
-                            sem in query_mask[qkp_y - 5:qkp_y + 5, qkp_x - 5:qkp_x + 5]) or \
-                                not (5 < qkp_x < width - 5 and 5 < qkp_y < height - 5):
-                            is5x5.append(1)
-                        else:
-                            is5x5.append(0)
-
+                    if totPointCounts > 0: # and score / totPointCounts > ratio_threshold:
+                        ratios.append(score) #/ totPointCounts)
                     else:
                         ratios.append(0)
+
+                    if (5 < qkp_x < width - 5 and 5 < qkp_y < height - 5 and \
+                        sem in query_mask[qkp_y - 5:qkp_y + 5, qkp_x - 5:qkp_x + 5]) or \
+                            not (5 < qkp_x < width - 5 and 5 < qkp_y < height - 5):
+                        is5x5.append(1)
+                    else:
                         is5x5.append(0)
 
-                ratios = np.array(ratios)
-                is5x5 = np.array(is5x5)
+                else:
+                    ratios.append(0)
+                    is5x5.append(0)
 
-                top_idx = np.argmax(ratios)
-                all_ratios_kNN_15x15_largest.append(ratios[top_idx])
-                matches_kNN_15x15_largest.append(m[top_idx])
+            ratios = np.array(ratios)
+            is5x5 = np.array(is5x5)
 
-                matches_1NN_15x15.append(m[0])
-                ratios_1NN_15x15.append(ratios[0])
+            top_idx = np.argmax(ratios)
+            all_ratios_kNN_15x15_largest.append(ratios[top_idx])
+            matches_kNN_15x15_largest.append(m[top_idx])
 
-                all_ratios_kNN_15x15_all += [r for r in ratios if r!=0]
-                matches_kNN_15x15_all += [match for c, match in enumerate(m) if ratios[c] != 0]
+            matches_1NN_15x15.append(m[0])
+            ratios_1NN_15x15.append(ratios[0])
 
-                ratios[1-is5x5] = 0
-                top_idx = np.argmax(ratios)
-                all_ratios_kNN_5x5_largest.append(ratios[top_idx])
-                matches_kNN_5x5_largest.append(m[top_idx]),
+            all_ratios_kNN_15x15_all += [r for r in ratios if r!=0]
+            matches_kNN_15x15_all += [match for c, match in enumerate(m) if ratios[c] != 0]
 
-                all_ratios_kNN_5x5_all += [r for r in ratios if r != 0]
-                matches_kNN_5x5_all += [match for c, match in enumerate(m) if ratios[c] != 0]
+            ratios[1-is5x5] = 0
+            top_idx = np.argmax(ratios)
+            all_ratios_kNN_5x5_largest.append(ratios[top_idx])
+            matches_kNN_5x5_largest.append(m[top_idx]),
+
+            all_ratios_kNN_5x5_all += [r for r in ratios if r != 0]
+            matches_kNN_5x5_all += [match for c, match in enumerate(m) if ratios[c] != 0]
 
         # endregion
 
@@ -315,23 +313,6 @@ def get_stats(query_names, k, slicepath, slice, savepath, debug_mode, scores_mod
 
             stats_df = pd.concat([stats_df, query_stats], axis=0 )
 
-        # # region Temporary stat writing for score only - revert to 29/08 before 9.40 to erase
-        # if not debug_mode and scores_mode:
-        #     query_stats = pd.DataFrame()
-        #     #['img_name',  'experiment_type', 'k', 'ratio_test',  'matches_in', 'success', 'inliers', 'position_error', 'orientation_error']
-        #     query_stats['img_name'] = [query_name for i in range(1)]
-        #     query_stats['experiment_type'] = [ 'kNN_15x15_largest']
-        #     query_stats['k'] = [ k]
-        #     query_stats['matches_in'] = [ len(matches_kNN_15x15_largest)]
-        #     query_stats['matches_in_effective'] = [ len([s for s in all_ratios_kNN_15x15_largest if s > 0])]
-        #     query_stats['success'] = [success_kNN_15x15_largest]
-        #     query_stats['inliers'] = [ sum(inliers_kNN_15x15_largest)]
-        #     query_stats['position_error'] = [ position_error_kNN_15x15_largest]
-        #     query_stats['orientation_error'] = [rotation_error_kNN_15x15_largest]
-        #
-        #     stats_df = pd.concat([stats_df, query_stats], axis=0 )
-        # endregion
-
 
     stats_df.to_csv(os.path.join(savepath, 'pose_est_stats.csv'))
 
@@ -351,21 +332,6 @@ if __name__ == '__main__':
     save_scores = True
 
     k = 2
-    # compare_pose_est(query_name, k, slicepath, slice)
-
-    # query_names = [query_name]
-    # query_names = [n for r, s, f in os.walk(os.path.join(slicepath, 'query')) for n in f if n.endswith('.jpg')]
-    # query_names = np.array(query_names)[np.random.choice(len(query_names), 150, replace=False)]
-
-    # with open(os.path.join(slicepath, 'traversals.json'), 'r') as f:
-    #     traversals_dict = json.load(f)
-    #
-    # # traversal_counts = list(map(len, traversals_dict.values()))
-    # query_names = np.array([])
-    # for date, img_names in traversals_dict.items():
-    #     query_names = np.append(query_names,  np.array(img_names)[np.random.choice(len(img_names), int(np.floor(len(img_names)*0.1)), replace=False)])
-    #
-    # query_names = np.array(query_names)
 
     with open(os.path.join(my_repo_path, 'pose_estimation/experiments/repeated_structures_queries_2022_08_22_18_23_57_c0_slice22_70imgs.txt'), 'r') as f:
         query_names = [n[:-1] for n in f.readlines()]
