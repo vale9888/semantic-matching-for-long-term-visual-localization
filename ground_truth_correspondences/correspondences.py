@@ -1,33 +1,14 @@
-import collections
-import datetime as dt
-import json
-import math
-import sqlite3
-
 import cv2 as cv
 import h5py
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import pandas as pd
-import torch
 from scipy.spatial import distance_matrix
-from scipy.optimize import minimize
-import datetime
-import time
 import math
-# from hungarian_algorithm import algorithm
-from munkres import Munkres, print_matrix
 
-import sys
-
-
-from GSMC.gsmc import project_point_cloud
 import fine_grained_segmentation.datasets.dataset_configs as data_configs
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_next_bytes, qvec2rotmat, read_images_binary, read_cameras_binary
 from GSMC.gsmc_utils import get_point_cloud_info
-from pose_estimation.pipeline import get_ground_truth_poses, get_descriptors_image, get_camera_parameters, get_reference_images_info_binary
+from pose_estimation.utils.data_loading import get_ground_truth_poses, get_descriptors_image, get_camera_parameters, get_reference_images_info_binary
 from visualization.visualization_tools import show_kp
 
 
@@ -35,39 +16,18 @@ def rgb_to_hex(rgb):
     return '#%02x%02x%02x' % tuple(rgb)
 
 
-def project_points(Rmat, tvec, camera_internals, point_cloud_info, project_point_ids=None, height=768, width=1024, correct_distortion=False, distortion_coefs=None ):
+def project_points(Rmat, tvec, camera_internals, point_cloud_info, project_point_ids=None, height=768, width=1024, distortion_coefs=None ):
     if project_point_ids is None:
         project_point_ids = [n for n in point_cloud_info.keys()]
 
     colors = []
     p3D = np.array([point_cloud_info[pid].xyz for pid in project_point_ids])
-    if correct_distortion:
-        correct_distortion = [0,0,0,0]
     p2D = cv.projectPoints(p3D, Rmat, tvec, camera_internals, np.array(distortion_coefs))[0].reshape(
         (len(project_point_ids), 2))
 
     for pid in project_point_ids:
         colors.append(point_cloud_info[pid].rgb)
 
-    #
-    # X_hcoords = np.ones((4, len(project_point_ids)))
-    # for c, pid in enumerate(project_point_ids):
-    #     X_hcoords[:, c] = np.array(list(point_cloud_info[pid].xyz) + [1])
-    #     colors.append(point_cloud_info[pid].rgb)
-    #
-    # x_hcoords = np.matmul(P, X_hcoords)
-    # x_hcoords = x_hcoords / x_hcoords[2, :]
-    # if correct_distortion:
-    #     x = x_hcoords[0, :]
-    #     y = x_hcoords[1, :]
-    #     r2 = x ** 2 + y ** 2
-    #     x_d = x * (1 + distortion_coefs[0] * r2 + distortion_coefs[1] * r2 ** 2) + 2 * distortion_coefs[2] * x * y + \
-    #           distortion_coefs[3] * (r2 + 2 * x ** 2)
-    #     y_d = y * (1 + distortion_coefs[0] * r2 + distortion_coefs[1] * r2 ** 2) + 2 * distortion_coefs[3] * x * y + \
-    #           distortion_coefs[2] * (r2 + 2 * y ** 2)
-    #     x_hcoords[0, :] = x_d
-    #     x_hcoords[1, :] = y_d
-    # x_hcoords = np.matmul(camera_internals, x_hcoords)
     x_coords_effective = []
     colors_effective = []
     pids_effective = []
@@ -91,252 +51,6 @@ def get_correspondence(corr_name):
         mat_content[k] = np.array(v)
 
     return mat_content
-
-
-def check_corresponding_image_counts(slicepath):
-    corr_set_config = data_configs.CmuConfig()
-    slice = '22'
-
-    ref_names = dict()
-    q_names = dict()
-    mat = []
-    for root, subdir, file in os.walk(corr_set_config.correspondence_path):
-        for f in file:
-            if 'slice' + slice in f and f.endswith('.mat'):
-                mat_content = get_correspondence(f)
-
-                # get image names
-                ref_name = ''.join(chr(a) for a in mat_content['im_i_path']).split('/')[2]
-                query_name = ''.join(chr(a) for a in mat_content['im_j_path']).split('/')[2]
-
-                ref_names[ref_name] = ref_names.get(ref_name, 0) + 1
-                if ref_names[ref_name] == 1:
-                    q_names[ref_name] = [(query_name,f)]
-                else:
-                    q_names[ref_name] += [(query_name,f)]
-                # for plotting correspondences among 2 imgs only
-                if ref_name == 'img_07652_c1_1285950332288146us.jpg' and query_name == 'img_07899_c1_1292959625065025us.jpg':
-                    mat = mat_content
-                # if ref_name == 'img_07652_c1_1285950332288146us.jpg':
-                #     mat.append(mat_content)
-
-    for k, v in ref_names.items():
-        if v==2:
-            print(k)
-            print(q_names[k])
-
-    return mat
-
-
-# def exploratory_analysis():
-#     slice_path = '/home/valentinas98/repos/Thesis_repo/Data/Extended-CMU-Seasons/slice22'
-#     slice = '22'
-#
-#     corr_mat = check_corresponding_image_counts(slice_path)
-#
-#     # choose some image names to perform check. We choose the ones with most corresponding images? Or that's a bias?
-#     # query_names = ['img_07721_c0_1285950338287044us.jpg', 'img_07613_c0_1285950328888719us.jpg']
-#     # for now only one
-#     # query_names = ['img_07595_c1_1284563914987092us.jpg'] #['img_07253_c1_1303399116249565us.jpg'] # 'img_07613_c0_1285950328888719us.jpg' # no correspondences here... but I used it for some analysis (projections)
-#     query_names = ['img_08364_c1_1288793059850196us.jpg']  # ['img_07899_c1_1292959625065025us.jpg']
-#     ref_name = 'img_07652_c1_1285950332288146us.jpg'
-#
-#     # get point cloud info
-#     full_points3D = get_point_cloud_info(slice_path)
-#
-#     # get further point cloud information for additional point filtering
-#     database_path = '/home/valentinas98/repos/Thesis_repo/Data/Extended-CMU-Seasons/slice' + str(
-#         slice) + '/database' + str(slice) + '.db'
-#     connection = sqlite3.connect(database_path)
-#     cursor = connection.cursor()
-#
-#     imagesbin_path = '/home/valentinas98/repos/Thesis_repo/Data/Extended-CMU-Seasons/slice' + str(
-#         slice) + '/sparse/images.bin'
-#     db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = get_reference_images_info_binary(
-#         imagesbin_path, cursor)
-#
-#     original_des_size = len(db_p3D_ids)
-#
-#     db_image_ids = [i for c, i in enumerate(db_image_ids) if db_p3D_ids[c] != -1]
-#     db_image_names = [i for c, i in enumerate(db_image_names) if db_p3D_ids[c] != -1]
-#     db_kp_coords = [(db_kp_coords_x[i], db_kp_coords_y[i]) for i in range(len(db_kp_coords_x)) if
-#                     db_p3D_ids[i] != -1]  # hay problema
-#     db_descriptors = db_descriptors[[c for c, i in enumerate(db_p3D_ids) if i != -1], :]
-#     db_p3D_ids = [i for c, i in enumerate(db_p3D_ids) if db_p3D_ids[c] != -1]
-#     db_camera_id = ['c0' if 'c0' in name else 'c1' for name in db_image_names]
-#
-#     # get all queries GT
-#     poses, query_names = get_ground_truth_poses(query_names, slice_path)
-#     # region Database queries
-#     # with open(os.path.join(slice_path, 'ground-truth-database-images-slice22.txt'), 'r') as f:
-#     #     lines = f.readlines()
-#     #     lines = [l.split(' ') for l in lines]
-#     #     poses = [[float(t) for t in p[1:8]] for p in lines if p[0] in query_names]
-#     #     query_names = [p[0] for p in lines if p[0] in query_names]
-#     # endregion
-#
-#     # region To use when want to check database images and not queries
-#     poses = []
-#     image_ids = []
-#     kp_coords_x = []
-#     kp_coords_y = []
-#     point3Ds = []
-#     image_names = []
-#     with open(imagesbin_path, "rb") as fid:
-#         num_reg_images = read_next_bytes(fid, 8, "Q")[0]
-#         for _ in range(num_reg_images):
-#             binary_image_properties = read_next_bytes(
-#                 fid, num_bytes=64, format_char_sequence="idddddddi")
-#             image_id = binary_image_properties[0]
-#             poses.append(binary_image_properties[1:8])
-#             current_char = read_next_bytes(fid, 1, "c")[0]
-#             image_name = ""
-#             while current_char != b"\x00":  # look for the ASCII 0 entry
-#                 image_name += current_char.decode("utf-8")
-#                 current_char = read_next_bytes(fid, 1, "c")[0]
-#
-#             num_points2D = read_next_bytes(fid, num_bytes=8,
-#                                            format_char_sequence="Q")[0]
-#             x_y_id_s = read_next_bytes(fid, num_bytes=24 * num_points2D,
-#                                        format_char_sequence="ddq" * num_points2D)
-#             xs = list(map(float, x_y_id_s[0::3]))
-#             ys = list(map(float, x_y_id_s[1::3]))
-#             point3D_ids = list(map(int, x_y_id_s[2::3]))
-#             image_ids = image_ids + [image_id for i in range(num_points2D)]
-#             image_names = image_names + [image_name for i in range(num_points2D)]
-#             kp_coords_x = kp_coords_x + xs
-#             kp_coords_y = kp_coords_y + ys
-#             point3Ds = point3Ds + point3D_ids
-#     # endregion
-#
-#     for index in range(len(query_names)):
-#         # get image keypoints,
-#         qkp, q_descriptors = get_descriptors_image(query_names[index], slice_path, 'query', slice=slice)
-#         qkp = [[kp[0], kp[1]] for kp in qkp]
-#
-#         rkp, r_descriptors = get_descriptors_image(ref_name, slice_path, 'query', slice=slice)
-#         rkp = [[kp[0], kp[1]] for kp in rkp]
-#         # region Database stuff
-#         # qkp = [ db_kp_coords[c] for c, name in enumerate(db_image_names) if db_p3D_ids[c]!=-1 and name==query_names[index]]
-#         # endregion
-#
-#         # region for database images: verify that the point cloud is keeping right points
-#         # point3D_path = slice_path + '/sparse/points3D.bin'
-#         # imgs = read_images_binary(imagesbin_path)
-#         # pts3D = read_points3D_binary(point3D_path)
-#         #
-#         # image_data = []
-#         # for img in imgs.values():
-#         #     if img.name == query_names[index]:
-#         #         image_data = img
-#         #         break
-#         #
-#         # seen_points_ids = image_data.point3D_ids
-#         # seen_points = [list(pts3D[idx].xyz) for idx in seen_points_ids if idx != -1]
-#         # endregion
-#
-#         # get intrinsics and distortion info
-#         camera_id = 'c0' if 'c0' in query_names[index] else 'c1'
-#         intrinsics, dist_coefs = get_camera_parameters(camera_id)
-#
-#         # get image ground truth pose,
-#         r_gt = poses[index][:4]
-#         R_gt = qvec2rotmat(r_gt)
-#         c_gt = np.array(poses[index][4:])
-#
-#         # and ground truth P (without K)
-#         t = - R_gt.dot(c_gt)
-#         # c_gt = - R_gt.T.dot(t)
-#         P = np.zeros((3, 4))
-#         P[:, :-1] = R_gt
-#         P[:, 3] = t
-#
-#         # project points from right camera only
-#         # proj_ids = set()
-#         # for c, db_p3D_id in enumerate(db_p3D_ids):
-#         #     if db_camera_id[c] == camera_id:
-#         #         proj_ids.update([db_p3D_id])
-#         # proj_ids = [k for k in full_points3D.keys() if k in proj_ids]
-#         # proj_qkp, proj_colors, proj_pids = project_points(P, intrinsics, full_points3D, project_point_ids=proj_ids, correct_distortion=True, distortion_coefs=dist_coefs)
-#
-#         # region Database plot
-#         # fig = plt.figure()
-#         # ax = plt.axes(projection='3d')
-#         # ax.scatter3D([pt[0] for pt in seen_points], [pt[1] for pt in seen_points], [pt[2] for pt in seen_points], c=np.array(['fuchsia' for idx in seen_points_ids if idx != -1]), s=1)
-#         # wannabe_pts = [list(pts3D[idx].xyz) for idx in proj_pids]
-#         # ax.scatter3D([pt[0] for pt in wannabe_pts], [pt[1] for pt in wannabe_pts], [pt[2] for pt in wannabe_pts], c='cyan', s=1)
-#         # plt.show()
-#         # endregion
-#
-#         # there's a problem of visibility. I think we should try 2 ways:
-#         # 1. use the point visibility information to restrict the group consciously ( and check how many remain compared to the gt )
-#         # 2. use the viewed points of the closest image in the database (we know it since we have the gt centers)
-#         # which one? 2. is probably faster but approximated and biased towards what's seen in the reference img.
-#         # It's also true that probably 1. is also biased and anyway the point cloud was reconstructed from there.
-#         visibility_info_pids = []
-#         # for pid in proj_pids:
-#         #     pt = full_points3D[pid]
-#         #     dif = (c_gt - pt.xyz)
-#         #     ssd = np.sum(dif ** 2)
-#         #     cos_angle = dif.dot(pt.v) / math.sqrt(ssd)
-#         #     if pt.dlow ** 2 -1 < ssd < pt.dup ** 2+1 and np.arccos(cos_angle)<pt.theta/2*1.05:
-#         #         visibility_info_pids.append(pid)
-#
-#         # region Database plot
-#         # fig = plt.figure()
-#         # ax = plt.axes(projection='3d')
-#         # ax.scatter3D([pt[0] for pt in seen_points], [pt[1] for pt in seen_points], [pt[2] for pt in seen_points],
-#         #              c=np.array(['fuchsia' for idx in seen_points_ids if idx != -1]), s=1)
-#         # wannabe_pts = [list(pts3D[idx].xyz) for idx in visibility_info_pids]
-#         # ax.scatter3D([pt[0] for pt in wannabe_pts], [pt[1] for pt in wannabe_pts], [pt[2] for pt in wannabe_pts],
-#         #              c='cyan', s=1)
-#         # plt.show()
-#         # endregion
-#
-#         # Plot projected points against keypoints first.
-#         # show_kp(os.path.join(slice_path, 'query/'+query_names[index]), qkp + list(proj_qkp), col=['fuchsia' for _ in range(len(qkp))] + ['cyan' for _ in range(len(proj_qkp))], alpha=0.8)
-#         # show_kp(os.path.join(slice_path, 'query/'+query_names[index]), list(proj_qkp), col=np.array([rgb_to_hex(proj_color) for proj_color in proj_colors]))
-#         # va bene dai la compro - confronta con img img_07288_c1_1303399120716257us.jpg
-#
-#         # region Database trials
-#         # show_kp(os.path.join(slice_path, 'database/' + query_names[index]), qkp + list(proj_qkp),
-#         #         col=['fuchsia' for _ in range(len(qkp))] + ['cyan' for _ in range(len(proj_qkp))], alpha=0.8)
-#         # endregion
-#
-#         # region Visualization 2 - altra visualizzazione: i punti che sono in corrispondenza (rispetto al totale dei keypoints e rispetto ai punti proiettati
-#         # Mi aspetto che siano più vicini ai punti proiettati
-#         # show_kp(os.path.join(slice_path, 'query/'+query_names[index]), qkp + corr_mat['pt_j'].tolist(), col=['fuchsia' for _ in range(len(qkp))] + ['cyan' for _ in range(len(corr_mat['pt_j']))])
-#         show_kp(os.path.join(slice_path, 'query/' + ref_name), rkp + corr_mat['pt_i'].tolist(),
-#                 col=['fuchsia' for _ in range(len(rkp))] + ['cyan' for _ in range(len(corr_mat['pt_i']))])
-#
-#         # endregion
-#
-#     # region Visualization 3 - altra ancora: reference su cui plotti tutti i punti delle corrispondenze
-#
-#     # plot_kps = []
-#     # colors = []
-#     # col_list = ['orangered', 'yellow', 'cyan', 'navy', 'darkviolet', 'crimson', 'lawngreen', 'hotpink', 'white']
-#     # for c, d in enumerate(corr_mat):
-#     #     plot_kps += d['pt_i'].tolist()
-#     #     colors += [col_list[c] for _ in range(len(d['pt_i']))]
-#     #
-#     # show_kp(os.path.join(slice_path, 'query/'+ref_name),plot_kps, col=colors, alpha=0.8 )
-#
-#     # endregion
-#
-#     #######################
-#
-#     # 1. find spatially admissible neighbors
-#     # round of assignments: search NNs of projected 3D pts within a circle of certain ray.
-#     # Add fictitious point that
-#     # represents no assignment -> all must be assigned, all circles have at least 2 options or if only one the point
-#     # in the PC has no correspondent
-#
-#     # temporary assignments: every PC point assigned to its nearest neighbor in the image if any. If any two PC points are NN of the same point the match is established with the closest
-#
-#     # Get corresponding image keypoints. Repeat projection there
-#
-#     # Capire in che formato sono le corrispondenze e i keypoint (pixel interi o float). Capire se aggiungere corrispondenze può aiutare o confonde
 
 
 def get_gt_matches(query_name, slicepath, slice, qkp=None, full_points3D=None, visibility_check=True, return_prjpts=False, proj_pts_dict=None):
@@ -415,7 +129,7 @@ def get_gt_matches(query_name, slicepath, slice, qkp=None, full_points3D=None, v
             return np.zeros(shape=(len(qkp), len(full_points3D.keys())), dtype=np.float64)
         proj_qkp, proj_qcolors, proj_qpids = project_points(R_gt_query, t_gt_query, intrinsics, full_points3D,
                                                             project_point_ids=visibility_info_pids,
-                                                            correct_distortion=True, distortion_coefs=dist_coefs)
+                                                            distortion_coefs=dist_coefs)
 
 
     else:
@@ -458,8 +172,9 @@ def get_gt_matches(query_name, slicepath, slice, qkp=None, full_points3D=None, v
             if return_prjpts:
                 return [], [], []
             return np.zeros(shape=(len(qkp), len(full_points3D.keys())), dtype=np.float64)
-        proj_qkp, proj_qcolors, proj_qpids = project_points(R_gt_query, t_gt_query, intrinsics, full_points3D, project_point_ids=visibility_info_pids,
-                                                        correct_distortion=True, distortion_coefs=dist_coefs)
+        proj_qkp, proj_qcolors, proj_qpids = project_points(R_gt_query, t_gt_query, intrinsics, full_points3D,
+                                                            project_point_ids=visibility_info_pids,
+                                                            distortion_coefs=dist_coefs)
 
     verified_proj_qkps = proj_qkp
     verified_projpt_ids = proj_qpids
@@ -493,58 +208,3 @@ def get_gt_matches(query_name, slicepath, slice, qkp=None, full_points3D=None, v
     # show_kp(os.path.join(slice_path, 'query/'+query_name), qkp + list(q_corr), col=['fuchsia' for _ in range(len(qkp))] + ['cyan' for _ in range(len(q_corr))], alpha=0.8)
     # # endregion
     return match_gt_matrix
-
-
-def esperimenti_vari_di_img_con_filtro_corrispondenze(slicepath, slice):
-    # Prima immagine che ho studiato. Le decisioni potrebbero avere bias qui. Scelta per avere tante img corrispondenti, per il resto a caso
-    query_name = 'img_07899_c1_1292959625065025us.jpg'
-    correspondence_name = 'correspondence_slice22_run13_run29_c1362_c2346.mat'
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-    # Voglio provare questa img perchè ricordo che in questa view c'erano nuvole ricostruite in 3D che si proiettavano. Si spera che le corrispondenze le tolgano
-    # non si vede molto quello che cercavo
-    query_name = 'img_07405_c0_1290445322611210us.jpg'
-    correspondence_name = 'correspondence_slice22_run13_run28_c1194_c2192.mat'
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-    # riproviamo
-    query_name = 'img_07858_c0_1292959621598342us.jpg'
-    correspondence_name = 'correspondence_slice22_run13_run29_c1275_c2263.mat'
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-    # check di una img dove ci sono solo 2 corrispondenze
-    # query_name/ = 'img_07572_c1_1288106907370711us.jpg'
-    # correspondence_name = 'correspondence_slice22_run13_run25_c1328_c2360.mat'
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-    # check di un caso in cui l'immagine è tutta rovinata
-    query_name = 'img_07834_c0_1289590322289997us.jpg'
-    correspondence_name = ''
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-    query_name = 'img_07595_c1_1284563914987092us.jpg'
-    correspondence_name = ''
-    # get_gt_matches(query_name, correspondence_name, slicepath, slice)
-
-
-    query_name = 'img_07595_c1_1284563914987092us.jpg'
-    correspondence_name = ''
-    get_gt_matches(query_name, slicepath, slice)
-
-
-if __name__=='__main__':
-    slice_path = '/home/valentinas98/repos/Thesis_repo/Data/Extended-CMU-Seasons/slice22'
-    slice = '22'
-
-    # Option 0: choose correspondence
-    # check_corresponding_image_counts(slice_path)
-
-    # Option 1: explore the placement of keypoints, point cloud points and correspondences
-    # exploratory_analysis()
-
-    # Option 2: get the "ground truth" correspondence matrix
-    correspondence_name = 'correspondence_slice22_run13_run29_c1362_c2346.mat'
-    query_name = 'img_07899_c1_1292959625065025us.jpg'
-
-    # mat = get_gt_matches(query_name, correspondence_name, slice_path, slice)
-    esperimenti_vari_di_img_con_filtro_corrispondenze(slice_path, slice)
