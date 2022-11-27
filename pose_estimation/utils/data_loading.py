@@ -18,6 +18,7 @@ from scipy.spatial import distance_matrix
 import datetime
 
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_next_bytes
+from GSMC.gsmc_utils import get_point_cloud_info, qvec2rotmat
 
 
 def get_descriptors_image(image_name, slice_path, type, slice):
@@ -167,3 +168,65 @@ def get_ground_truth_poses(query_names, slicepath):
 #         ref_names = [p[0] for p in lines]
 #
 #     return [centres[i] for i in range(len(ref_names)) if camera_id in ref_names[i]], [r_name for r_name in ref_names if camera_id in ref_names]
+
+
+def load_data(query_name, slicepath, slice, load_database=True):
+    '''Return a collection of useful data that is commonly used in experiments'''
+    data_dict = dict()
+    # reference PC
+    if load_database:
+        database_path = slicepath + '/database' + str(slice) + '.db'
+        connection = sqlite3.connect(database_path)
+        cursor = connection.cursor()
+
+        imagesbin_path = slicepath + '/sparse/images.bin'
+        db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = get_reference_images_info_binary(
+            imagesbin_path, cursor)
+
+        db_descriptors = db_descriptors[[c for c, i in enumerate(db_p3D_ids) if i != -1], :]
+        db_p3D_ids = [i for c, i in enumerate(db_p3D_ids) if db_p3D_ids[c] != -1]
+
+        full3Dpoints = get_point_cloud_info(slicepath)
+
+        data_dict['db_descriptors'] = db_descriptors
+        data_dict['db_p3D_ids'] = db_p3D_ids
+        data_dict['full3Dpoints'] = full3Dpoints
+
+    # image
+    camera_id = 'c0' if 'c0' in query_name else 'c1'
+    camera_matrix, dist_coefs = get_camera_parameters(camera_id)
+    qkp, q_descriptors = get_descriptors_image(query_name, slicepath, 'query', slice=slice)
+
+    query_mask = []
+    with open(os.path.join(slicepath, 'semantic_masks/numeric/query', query_name[:-4] + '.txt'), 'r') as fq:
+        lines = fq.readlines()
+        for line in lines:
+            query_mask.append([int(i) for i in line.split(' ')])
+
+    query_mask = np.array(query_mask)
+    # setting no particular priority
+    kp_priority = np.arange(len(qkp))
+
+    # ground truth info
+    poses, query_names = get_ground_truth_poses([query_name], slicepath)
+    r_gt = poses[0][:4]
+    R_gt = qvec2rotmat(r_gt)
+    c_gt = np.array(poses[0][4:])
+
+    g_direction = np.matmul(R_gt,
+                            np.array([0, 0, -1]))
+
+
+    # collect all in a dictionary
+    data_dict['camera_id'] = camera_id
+    data_dict['camera_matrix'] = camera_matrix
+    data_dict['dist_coefs'] = dist_coefs
+    data_dict['kp_priority'] = kp_priority
+    data_dict['qkp'] = qkp
+    data_dict['qdesc'] = q_descriptors
+    data_dict['query_mask'] = query_mask
+    data_dict['c_gt'] = c_gt
+    data_dict['R_gt'] = R_gt
+    data_dict['g_direction'] = g_direction
+
+    return data_dict
