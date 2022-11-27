@@ -296,22 +296,22 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
             rotation_error_kNN_5x5_all = -1
             inliers_kNN_5x5_all = []
 
-        if not debug_mode and scores_mode:
-            query_stats = pd.DataFrame()
-            query_stats['img_name'] = [query_name for i in range(5)]
-            query_stats['experiment_type'] = ['1NN_15x15', 'kNN_15x15_largest', 'kNN_15x15_all',  'kNN_5x5_largest', 'kNN_5x5_all' ]
-            query_stats['k'] = [1, k, k, k, k]
-            query_stats['matches_in'] = [len(matches_1NN_15x15), len(matches_kNN_15x15_largest), len(matches_kNN_15x15_all), len(matches_kNN_5x5_largest), len(matches_kNN_5x5_all)]
-            query_stats['matches_in_effective'] = [len([s for s in ratios_1NN_15x15 if s > ratio_threshold]), len([s for s in all_ratios_kNN_15x15_largest if s > ratio_threshold]),
-                                                   len([m for m in all_ratios_kNN_15x15_all if m > ratio_threshold]),
-                                                   len([m for m in all_ratios_kNN_5x5_largest if m > ratio_threshold]),
-                                                   len([m for m in all_ratios_kNN_5x5_all if m > ratio_threshold])]
-            query_stats['success'] = [success_1NN_15x15, success_kNN_15x15_largest, success_kNN_15x15_all, success_kNN_5x5_largest, success_kNN_5x5_all]
-            query_stats['inliers'] = [sum(inliers_1NN_15x15), sum(inliers_kNN_15x15_largest), sum(inliers_kNN_15x15_all), sum(inliers_kNN_5x5_largest), sum(inliers_kNN_5x5_all)]
-            query_stats['position_error'] = [position_error_1NN_15x15, position_error_kNN_15x15_largest, position_error_kNN_15x15_all, position_error_kNN_5x5_largest, position_error_kNN_5x5_all]
-            query_stats['orientation_error'] = [rotation_error_1NN_15x15, rotation_error_kNN_15x15_largest, rotation_error_kNN_15x15_all, rotation_error_kNN_5x5_largest, rotation_error_kNN_5x5_all]
 
-            stats_df = pd.concat([stats_df, query_stats], axis=0 )
+        query_stats = pd.DataFrame()
+        query_stats['img_name'] = [query_name for i in range(5)]
+        query_stats['experiment_type'] = ['1NN_15x15', 'kNN_15x15_largest', 'kNN_15x15_all',  'kNN_5x5_largest', 'kNN_5x5_all' ]
+        query_stats['k'] = [1, k, k, k, k]
+        query_stats['matches_in'] = [len(matches_1NN_15x15), len(matches_kNN_15x15_largest), len(matches_kNN_15x15_all), len(matches_kNN_5x5_largest), len(matches_kNN_5x5_all)]
+        query_stats['matches_in_effective'] = [len([s for s in ratios_1NN_15x15 if s > ratio_threshold]), len([s for s in all_ratios_kNN_15x15_largest if s > ratio_threshold]),
+                                               len([m for m in all_ratios_kNN_15x15_all if m > ratio_threshold]),
+                                               len([m for m in all_ratios_kNN_5x5_largest if m > ratio_threshold]),
+                                               len([m for m in all_ratios_kNN_5x5_all if m > ratio_threshold])]
+        query_stats['success'] = [success_1NN_15x15, success_kNN_15x15_largest, success_kNN_15x15_all, success_kNN_5x5_largest, success_kNN_5x5_all]
+        query_stats['inliers'] = [sum(inliers_1NN_15x15), sum(inliers_kNN_15x15_largest), sum(inliers_kNN_15x15_all), sum(inliers_kNN_5x5_largest), sum(inliers_kNN_5x5_all)]
+        query_stats['position_error'] = [position_error_1NN_15x15, position_error_kNN_15x15_largest, position_error_kNN_15x15_all, position_error_kNN_5x5_largest, position_error_kNN_5x5_all]
+        query_stats['orientation_error'] = [rotation_error_1NN_15x15, rotation_error_kNN_15x15_largest, rotation_error_kNN_15x15_all, rotation_error_kNN_5x5_largest, rotation_error_kNN_5x5_all]
+
+        stats_df = pd.concat([stats_df, query_stats], axis=0 )
 
 
     stats_df.to_csv(os.path.join(savepath, 'pose_est_stats.csv'))
@@ -327,10 +327,6 @@ if __name__ == '__main__':
     slicepath = my_repo_path + '/data/Extended-CMU-Seasons/slice22'
     slice = '22'
 
-    debug_mode = False
-    scores_mode = True
-    save_scores = True
-
     k = 2
 
     with open(os.path.join(my_repo_path, 'pose_estimation/experiments/repeated_structures_queries_2022_08_22_18_23_57_c0_slice22_70imgs.txt'), 'r') as f:
@@ -341,8 +337,8 @@ if __name__ == '__main__':
     stats_dirname = os.path.join(my_repo_path, 'pose_estimation/results/semantic_matching_pose_comparisons',
                                  stats_dirname)
 
-    if not debug_mode:
-        if not os.path.exists(stats_dirname):
-            os.mkdir(stats_dirname)
 
-    get_stats(query_names, k, slicepath, slice, stats_dirname, debug_mode, scores_mode, save_scores, largest_score=True)
+    if not os.path.exists(stats_dirname):
+        os.mkdir(stats_dirname)
+
+    get_stats(query_names, k, slicepath, slice, stats_dirname, largest_score=True)

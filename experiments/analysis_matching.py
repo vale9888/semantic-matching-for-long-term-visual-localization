@@ -10,22 +10,11 @@ import datetime
 
 import context
 from ground_truth_correspondences.get_gt_matches import get_gt_matches
-from pose_estimation.utils.data_loading import get_reference_images_info_binary
+from pose_estimation.utils.data_loading import get_reference_images_info_binary, load_data
 from GSMC.gsmc_utils import get_point_cloud_info
 from GSMC.gsmc import GSMC_score
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_images_binary
-from pose_estimation.utils.data_loading import load_data
-
-def k_ratio_test(kplus1_nearest_matches, lowe_threshold):
-    good_matches_all = []
-    for matches in kplus1_nearest_matches:
-        good_matches = []
-        for m in matches[:-1]:
-            if m.distance < lowe_threshold * matches[-1].distance:
-                good_matches.append(m)
-        if len(good_matches) > 0:
-            good_matches_all.append(good_matches)
-    return good_matches_all
+from pose_estimation.utils.matching import k_ratio_test
 
 
 def get_stats(query_names, k_max, slicepath, slice, stats_dirname, gt_threshold=np.e**(-5), score_threshold=20, ratio_threshold=0.2, min_point_count=30, save_results=True, covisibility_threshold=0.2):

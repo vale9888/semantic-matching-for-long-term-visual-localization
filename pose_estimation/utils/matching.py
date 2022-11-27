@@ -57,3 +57,24 @@ def find_two_exclusive_matches(des_scene, des_query, point3D_ids):
             not_matchable.append(i)
     print("Could not find NN for %d descriptors." % (len(not_matchable)))
     return tuple(two_nearest_matches), not_matchable
+
+
+def ratio_test(two_nearest_matches, lowe_thr):
+    good_matches = []
+    for m, n in two_nearest_matches:
+        if m.distance < lowe_thr * n.distance:
+            good_matches.append(m)
+    print("[STATUS] Found " + str(len(good_matches)) + " matches validated by the Lowe's ratio test")
+    return good_matches
+
+
+def k_ratio_test(kplus1_nearest_matches, lowe_threshold):
+    good_matches_all = []
+    for matches in kplus1_nearest_matches:
+        good_matches = []
+        for m in matches[:-1]:
+            if m.distance < lowe_threshold * matches[-1].distance:
+                good_matches.append(m)
+        if len(good_matches) > 0:
+            good_matches_all.append(good_matches)
+    return good_matches_all
