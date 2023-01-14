@@ -1,10 +1,3 @@
-# Crono versions:
-# 16/08 before 21:50: version with all pose experiments with both our version of RANSAC and Opencv.
-# 16/08 after 21:50: cleaning up to have only our RANSAC and adding SSMC. Ratio threshold from 0.2 to 0.001, semantic window 15 pixel
-#                    seed 2250,
-# 20/08 mezzogiorno: aggiunta la possibilità di usare solo i match col miglior ratio e valutazione dei modelli su tutti i match (compresi quelli con score zero)
-
-
 import json
 import sqlite3
 
