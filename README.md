@@ -49,6 +49,8 @@ You may find code for the main experiments of our work in the folder `/experimen
 <a name="authors"/>
 
 ## Authors
-This project was developed by Valentina Sgarbossa [[Email](mailto:valentina.sgarbossa@mail.polimi.it)][[Github](https://github.com/vale9888)] under the supervision of Antonino Maria Rizzo [[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)] and Luca Magri [[Email](mailto:luca.magri@polimi.it)][[Webpage](https://magrilu.github.io/)], in the Department of Electronics, Informatics and Bioengineering at Politecnico di Milano.
+This project code was developed by Valentina Sgarbossa [[Email](mailto:valentina.sgarbossa@mail.polimi.it)][[Github](https://github.com/vale9888)], with contributions from Antonino Maria Rizzo [[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)]. 
+
+The research project was supervised by Antonino Maria Rizzo [[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)] and Luca Magri [[Email](mailto:luca.magri@polimi.it)][[Webpage](https://magrilu.github.io/)], in the Department of Electronics, Informatics and Bioengineering at Politecnico di Milano.
 
 The `/fine_grained_segmentation` code was adapted from the repository at https://github.com/maunzzz/fine-grained-segmentation-networks, _Larsson et al., Fine-Grained Segmentation Networks: Self-Supervised Segmentation for Improved Long-Term Visual Localization, 2019_.
