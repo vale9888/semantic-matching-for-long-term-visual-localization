@@ -15,7 +15,7 @@ import datetime
 
 import context
 
-from pose_estimation.utils.data_loading import get_reference_images_info_binary, get_descriptors_image, \
+from pose_estimation.utils.data_loading import _get_reference_images_info_binary, get_descriptors_image, \
     get_ground_truth_poses, get_camera_parameters
 from GSMC.gsmc_utils import get_point_cloud_info, qvec2rotmat
 from GSMC.gsmc import GSMC_score
@@ -45,7 +45,7 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
     cursor = connection.cursor()
 
     imagesbin_path = slicepath + '/sparse/images.bin'
-    db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = get_reference_images_info_binary(
+    db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = _get_reference_images_info_binary(
         imagesbin_path, cursor)
 
     db_descriptors = db_descriptors[[c for c, i in enumerate(db_p3D_ids) if i != -1], :]

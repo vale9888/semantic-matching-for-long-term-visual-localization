@@ -19,7 +19,7 @@ from GSMC.gsmc import project_point_cloud
 import fine_grained_segmentation.datasets.dataset_configs as data_configs
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_next_bytes, qvec2rotmat, read_images_binary, read_cameras_binary
 from GSMC.gsmc_utils import get_point_cloud_info
-from pose_estimation.utils.data_loading import get_ground_truth_poses, get_descriptors_image, get_camera_parameters, get_reference_images_info_binary
+from pose_estimation.utils.data_loading import get_ground_truth_poses, get_descriptors_image, get_camera_parameters, _get_reference_images_info_binary
 from visualization.visualization_tools import show_kp, rgb_to_hex
 
 

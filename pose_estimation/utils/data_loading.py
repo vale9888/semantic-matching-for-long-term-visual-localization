@@ -92,7 +92,7 @@ def get_camera_parameters(camera_id):
     return intrinsics, distortion_coefs
 
 
-def get_reference_images_info_binary(images_file, cur):
+def _get_reference_images_info_binary(images_file, cur):
     '''Utility to read reference images data'''
     image_ids = []
     kp_coords_x = []
@@ -135,6 +135,26 @@ def get_reference_images_info_binary(images_file, cur):
 
     return image_ids, kp_coords_x, kp_coords_y, point3Ds, descriptors, image_names, cur
 
+def get_ref_2D_data( slicepath ):
+
+    slice_num       =   slicepath.split('/')[-1][-2:]
+    database_path   =   os.path.join( slicepath, 'database' + str( slice_num ) + '.db' )
+    imagesbin_path  =   os.path.join( slicepath, 'sparse/images.bin' )
+
+    connection      =   sqlite3.connect( database_path )
+    cursor          =   connection.cursor()
+
+    db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = _get_reference_images_info_binary(
+        imagesbin_path, cursor)
+
+    db_image_ids    =   [ img_id for c, img_id in       enumerate( db_image_ids ) if db_p3D_ids[ c ] != -1 ]
+    db_kp_coords_x  =   [ x for c, x in                 enumerate( db_kp_coords_x ) if db_p3D_ids[ c ] != -1 ]
+    db_kp_coords_y  =   [ y for c, y in                 enumerate( db_kp_coords_y ) if db_p3D_ids[ c ] != -1 ]
+    db_image_names  =   [ img_name for c, img_name in   enumerate( db_image_names ) if db_p3D_ids[ c ] != -1 ]
+    db_descriptors  =   db_descriptors[ [c for c, i in  enumerate( db_p3D_ids ) if i != -1 ], : ]
+    db_p3D_ids      =   [ pt for pt in db_p3D_ids if pt != -1 ]
+
+    return db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names
 
 def get_ground_truth_poses(query_names, slicepath):
     '''Utility to get the ground truth poses for selected queries'''
@@ -180,7 +200,7 @@ def load_data(query_name, slicepath, slice, load_database=True):
         cursor = connection.cursor()
 
         imagesbin_path = slicepath + '/sparse/images.bin'
-        db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = get_reference_images_info_binary(
+        db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = _get_reference_images_info_binary(
             imagesbin_path, cursor)
 
         db_descriptors = db_descriptors[[c for c, i in enumerate(db_p3D_ids) if i != -1], :]

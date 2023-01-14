@@ -10,7 +10,7 @@ import datetime
 
 import context
 from ground_truth_correspondences.get_gt_matches import get_gt_matches
-from pose_estimation.utils.data_loading import get_reference_images_info_binary, load_data
+from pose_estimation.utils.data_loading import _get_reference_images_info_binary, load_data
 from GSMC.gsmc_utils import get_point_cloud_info
 from GSMC.gsmc import GSMC_score
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_images_binary
@@ -28,7 +28,7 @@ def get_stats(query_names, k_max, slicepath, slice, stats_dirname, gt_threshold=
     cursor = connection.cursor()
 
     imagesbin_path = slicepath + '/sparse/images.bin'
-    db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = get_reference_images_info_binary(
+    db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names, cursor = _get_reference_images_info_binary(
         imagesbin_path, cursor)
 
     db_descriptors = db_descriptors[[c for c, i in enumerate(db_p3D_ids) if i != -1], :]
