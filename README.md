@@ -6,7 +6,7 @@ A comprehensive repository to perform visual localization in presence of visual 
 | ![Licence](https://img.shields.io/badge/Licence-MIT-orange) |  ![Python](https://img.shields.io/badge/Python-yellow)| ![Pytorch](https://img.shields.io/badge/Pytorch-1.8.1-brightgreen) ![Flask](https://img.shields.io/badge/Flask-2.0.0-brightgreen) ![Streamlit](https://img.shields.io/badge/Streamlit-0.82.0-brightgreen) ![Pandas](https://img.shields.io/badge/Pandas-1.2.4-brightgreen)  -->
 
 <p align="left">
-  <img height="400" src="localization.jpg">
+  <img height="320" src="localization.jpg">
 </p>
  
 ### Contents
@@ -49,6 +49,8 @@ You may find code for the main experiments of our work in the folder `/experimen
 <a name="authors"/>
 
 ## Authors
-This project was developed by Valentina Sgarbossa [[Email](mailto:valentina.sgarbossa@mail.polimi.it)][[Github](https://github.com/vale9888)] under the supervision of Antonino Maria Rizzo [[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)] and Luca Magri [[Email](mailto:luca.magri@polimi.it)][[Webpage](https://magrilu.github.io/)], in the Department of Electronics, Informatics and Bioengineering at Politecnico di Milano.
+This project code was developed by Valentina Sgarbossa [[Email](mailto:valentina.sgarbossa@mail.polimi.it)][[Github](https://github.com/vale9888)], with contributions from Antonino Maria Rizzo <!--[[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)]-->. 
+
+The research project was supervised by Antonino Maria Rizzo <!--[[Email](mailto:antoninomaria.rizzo@mail.polimi.it)][[Github](https://github.com/rizzoantoninomaria)]--> and Luca Magri <!--[[Email](mailto:luca.magri@polimi.it)][[Webpage](https://magrilu.github.io/)]-->, in the Department of Electronics, Informatics and Bioengineering at Politecnico di Milano.
 
 The `/fine_grained_segmentation` code was adapted from the repository at https://github.com/maunzzz/fine-grained-segmentation-networks, _Larsson et al., Fine-Grained Segmentation Networks: Self-Supervised Segmentation for Improved Long-Term Visual Localization, 2019_.
