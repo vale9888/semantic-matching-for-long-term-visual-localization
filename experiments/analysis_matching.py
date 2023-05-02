@@ -238,7 +238,7 @@ def get_stats(query_names, k_max, slicepath, slice, stats_dirname, gt_threshold=
         ratio_cutoff_precisions = []
 
         for k in range(1, k_max+1):
-            for kp_num, (scores_list, point_count_list) in enumerate(zip(all_scores, all_point_counts)):
+            for kp_num, (scores_list, point_count_list) in enumerate(zip(all_scores_modified, all_point_counts_modified)):
                 for c, (sc, pc) in enumerate(zip(scores_list[:k], point_count_list[:k])):
                     qkp_idx = kp_priority[kp_num]
                     match = kplus1_nearest_matches[qkp_idx][c]
