@@ -132,7 +132,7 @@ def get_gt_matches(query_name, slicepath, slice, qkp=None, full_points3D=None, v
             return np.zeros(shape=(len(qkp), len(full_points3D.keys())), dtype=np.float64)
         proj_qkp, proj_qcolors, proj_qpids = project_points(R_gt_query, t_gt_query, intrinsics, full_points3D,
                                                             project_point_ids=visibility_info_pids,
-                                                            correct_distortion=True, distortion_coefs=dist_coefs)
+                                                           distortion_coefs=dist_coefs)
 
 
     else:

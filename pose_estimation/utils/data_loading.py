@@ -41,11 +41,11 @@ def get_descriptors_image(image_name, slice_path, type, slice):
             keypoints = np.zeros((0, 4), dtype=np.float32)
             descriptors = np.zeros((0, 128), dtype=np.uint8)
         else:
-            keypoints = np.fromstring(row[0], dtype=np.float32).reshape(-1, 6)
+            keypoints = np.frombuffer(row[0], dtype=np.float32).reshape(-1, 6)
             cursor.execute("SELECT data FROM descriptors WHERE image_id=?;",
                            (image_id,))
             row = next(cursor)
-            descriptors = np.fromstring(row[0], dtype=np.uint8).reshape(-1, 128)
+            descriptors = np.frombuffer(row[0], dtype=np.uint8).reshape(-1, 128)
 
         # keypoints: coord 0 e 1 are respectively x (------>) and y (|
         #                                                            |
@@ -137,7 +137,7 @@ def _get_reference_images_info_binary(images_file, cur):
 
 def get_ref_2D_data( slicepath ):
 
-    slice_num       =   slicepath.split('/')[-1][-2:]
+    slice_num       =   slicepath.split('/')[-1][-2:] if len( slicepath.split('/')[-1] ) else slicepath.split('/')[-2][-2:]
     database_path   =   os.path.join( slicepath, 'database' + str( slice_num ) + '.db' )
     imagesbin_path  =   os.path.join( slicepath, 'sparse/images.bin' )
 
@@ -156,16 +156,24 @@ def get_ref_2D_data( slicepath ):
 
     return db_image_ids, db_kp_coords_x, db_kp_coords_y, db_p3D_ids, db_descriptors, db_image_names
 
+def read_gt_file( filepath ):
+
+    pose_dict = dict()
+    with open( filepath, 'r' ) as file:
+        lines = file.readlines()
+        for l in lines:
+            l = l.split()
+            pose_dict[ l[ 0 ] ] = [ float( i ) for i in l[ 1: ] ]
+
+    return  pose_dict
+
 def get_ground_truth_poses(query_names, slicepath):
     '''Utility to get the ground truth poses for selected queries'''
     pose_dict = dict()
     for root, subdir, files in os.walk(os.path.join(slicepath, 'camera-poses')):
         for f in files:
-            with open(os.path.join(root, f)) as file:
-                lines = file.readlines()
-                for l in lines:
-                    l = l.split()
-                    pose_dict[l[0]] = [float(i) for i in l[1:]]
+            filepath    =   os.path.join(root, f)
+            pose_dict.update( read_gt_file( filepath ) )
 
     pose_list = []
     discarded_queries = []
