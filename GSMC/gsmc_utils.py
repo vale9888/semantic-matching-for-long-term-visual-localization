@@ -4,6 +4,8 @@ import json
 import numpy as np
 import os
 import statistics
+import torch
+import math
 
 import sys
 # insert at 1, 0 is the script path (or '' in REPL)
@@ -37,20 +39,20 @@ def get_point_cloud_info(slicepath):
         points3D = read_points3D_binary(os.path.join(slicepath, 'sparse/points3D.bin'))
         images = read_images_binary(os.path.join(slicepath, 'sparse/images.bin'))
 
-        if os.path.exists(os.path.join(slicepath, 'semantic_masks/numeric/database/database_predictions.json')):
-            with open(os.path.join(slicepath, 'semantic_masks/numeric/database/database_predictions.json'), 'r') as f:
-                predictions_ref_dict = json.load(f)
-        else:
-            predictions_ref_dict = dict()
-            for name in os.listdir(os.path.join(slicepath, 'semantic_masks/numeric/database/')):
-                if name.endswith('.txt'):
-                    db_mask = []
-                    with open(os.path.join(slicepath, 'semantic_masks/numeric/database/', name), 'r') as fd:
-                        lines = fd.readlines()
-                        for line in lines:
-                            db_mask.append([int(i) for i in line.split(' ')])
-                    predictions_ref_dict[name[:-4]+'.jpg'] = db_mask
-            print(f'Loaded {len(predictions_ref_dict)} queries. Now creating the full point cloud information')
+        # if os.path.exists(os.path.join(slicepath, 'semantic_masks/numeric/database/database_predictions.json')):
+        #     with open(os.path.join(slicepath, 'semantic_masks/numeric/database/database_predictions.json'), 'r') as f:
+        #         predictions_ref_dict = json.load(f)
+        # else:
+        predictions_ref_dict = dict()
+        for name in os.listdir(os.path.join(slicepath, 'semantic_masks/numeric/database/')):
+            if name.endswith('.txt'):
+                db_mask = []
+                with open(os.path.join(slicepath, 'semantic_masks/numeric/database/', name), 'r') as fd:
+                    lines = fd.readlines()
+                    for line in lines:
+                        db_mask.append([int(i) for i in line.split(' ')])
+                predictions_ref_dict[name[:-4]+'.jpg'] = db_mask
+        print(f'Loaded {len(predictions_ref_dict)} queries. Now creating the full point cloud information')
 
 
         # Fill enriched dictionary
@@ -151,3 +153,141 @@ def get_rotation_matrix(g_cam, xj_cam, C, Xj, zero_tol = 1e-3):
         R[:,2] = -R[:,2]
 
     return R.T
+
+def get_rotation_matrix_nd( g_cam, xj_cam, C, Xj, zero_tol = 1e-3 ):
+    '''
+    :param g_cam: (3, ) or (3,1) array containing the direction of gravity in camera coordinates
+    :param xj_cam: (3, n_pts) array containing homogeneous direction vectors (in rotated world coordinates, that is before applyng camera coordinates transformation) for all considered matches
+    :param C: (3, n_angles, n_pts ) array containing all temptative centers coordinates
+    :param Xj: (3, n_pts) array containing 3D point coordinates (in the world reference system) for all considered matches
+    :return: ( n_angles, n_pts, 3, 3 ) matrix with all rotation matrices
+    '''
+
+    g_cam = g_cam / np.linalg.norm( g_cam )
+    xj_cam = xj_cam / np.linalg.norm( xj_cam, axis = 0 )[ None ]
+
+    if 1 - np.abs( g_cam.dot( np.array( [ 0, 0, 1 ] ) ) ) < zero_tol:
+        beta = 0 if g_cam.dot( np.array( [ 0, 0, 1 ] ) ) > 0 else np.pi
+        R1 = np.eye( 3 )
+        R2 = np.array( [ [ 1, 0, 0 ],
+                         [ 0, np.cos( beta ), np.sin( beta ) ],
+                         [ 0, -np.sin( beta ), np.cos( beta ) ] ] )
+    else:
+        n_cam = np.cross( g_cam, np.array( [ 0, 0, 1 ] ) )
+        if np.abs( n_cam.dot( np.array( [ 0, 1, 0 ] ) ) ) < zero_tol:
+            alpha = np.pi / 2
+        else:
+            alpha = np.arctan( n_cam.dot( np.array( [ 0, 1, 0 ] ) ) / n_cam.dot( np.array( [ 1, 0, 0 ] ) ) )
+        R1 = np.array(
+            [ [ np.cos( alpha ), np.sin( alpha ), 0 ], [ -np.sin( alpha ), np.cos( alpha ), 0 ], [ 0, 0, 1 ] ] )
+
+        beta = np.arccos( -g_cam.dot( np.array( [ 0, 0, 1 ] ) ) )
+        R2 = np.array(
+            [ [ 1, 0, 0 ], [ 0, np.cos( beta ), np.sin( beta ) ], [ 0, -np.sin( beta ), np.cos( beta ) ] ] )
+
+    R2R1 = (R2 @ R1)  # 3 x 3
+    xj_12 = R2R1 @ xj_cam  # match_pts_2d rotated  # 3 x3 @ 3 x 1078
+
+    # TODO: vedere config degenerata sotto
+    # if np.abs( Xj[ :, 0 ] ) < zero_tol and np.abs( Xj[ :, 1 ] ):
+    #     print( "Degenerate config" )
+    #     return R2R1.T
+
+    ctr_matches_directions = (C - Xj[ :, None, : ])[ :2 ]
+    ctr_matches_directions = ctr_matches_directions / np.linalg.norm( ctr_matches_directions, axis = 0 )[
+        None ]  # (2 x n_angles x n_matches)
+
+    csi = np.pi + np.arccos( np.sum( xj_12[ :2, None, : ] * ctr_matches_directions, axis = 0 ) )
+
+    R3 = np.stack( [
+        np.stack( [ np.cos( csi ), np.sin( csi ), np.zeros_like( csi ) ], axis = -1 ),
+        np.stack( [ -np.sin( csi ), np.cos( csi ), np.zeros_like( csi ) ], axis = -1 ),
+        np.stack( [ np.zeros_like( csi ), np.zeros_like( csi ), np.ones_like( csi ) ], axis = -1 )
+    ], axis = -1 )  # 360 x 1078 x 3 x 3
+
+    R = R3 @ R2R1
+
+    # region Fix determinant < 0
+    R_det = np.linalg.det( R )
+    flag = R_det < 0
+    flag_reshaped = flag.reshape( flag.shape[ 0 ] * flag.shape[ 1 ] )
+    R_reshaped = R.reshape( R.shape[ 0 ] * R.shape[ 1 ], R.shape[ 2 ], R.shape[ 3 ] )
+    R_reshaped[ flag_reshaped, :, -1 ] = - R_reshaped[ flag_reshaped, :, -1 ]  # multiply last colum to -1
+    R = R_reshaped.reshape( R.shape[ 0 ], R.shape[ 1 ], R.shape[ 2 ], R.shape[ 3 ] )
+    # endregion
+
+    return np.swapaxes( R, -1, -2 )
+
+
+
+def get_rotation_matrix_nd_torch( g_cam, xj_cam, C, Xj, zero_tol = 1e-6, device = None ):
+    '''
+    :param g_cam: (3, ) or (3,1) array containing the direction of gravity in camera coordinates
+    :param xj_cam: (3, n_pts) array containing homogeneous direction vectors (in rotated world coordinates, that is before applyng camera coordinates transformation) for all considered matches
+    :param C: (3, n_angles, n_pts ) array containing all temptative centers coordinates
+    :param Xj: (3, n_pts) array containing 3D point coordinates (in the world reference system) for all considered matches
+    :return: ( n_pts,n_angles,  3, 3 ) matrix with all rotation matrices
+    '''
+
+    if device is None:
+        device = "cuda"
+
+    g_cam = g_cam / torch.linalg.norm( g_cam )
+    xj_cam = xj_cam / torch.linalg.norm( xj_cam, dim = 0 )[ None ]
+
+    z_axis_cam = torch.Tensor( [ 0, 0, 1 ]).float().to(device)
+    if 1 - torch.abs( g_cam.dot( z_axis_cam ) ) < zero_tol:
+        beta = 0.0 if g_cam.dot( z_axis_cam ) > 0 else math.pi
+        R1 = torch.eye( 3, device = device )
+        R2 = torch.tensor( [ [ 1, 0, 0 ],
+                         [ 0, torch.cos( beta ), torch.sin( beta ) ],
+                         [ 0, -torch.sin( beta ), torch.cos( beta ) ] ] ).float().to(device)
+    else:
+        n_cam = torch.cross( g_cam, z_axis_cam )
+        x_axis_cam = torch.Tensor( [ 1, 0, 0 ]).float().to(device)
+        y_axis_cam = torch.Tensor( [ 0, 1, 0 ]).float().to(device)
+
+        alpha = torch.arctan( n_cam.dot( y_axis_cam ) / ( n_cam.dot( x_axis_cam ) + zero_tol ) ) #add a small eps to avoid division by zero
+        R1 = torch.tensor([ [ torch.cos( alpha ), torch.sin( alpha ), 0 ],
+                            [ -torch.sin( alpha ), torch.cos( alpha ), 0 ],
+                            [ 0, 0, 1 ] ] ).float().to( device )
+
+        beta = torch.arccos( -g_cam.dot( z_axis_cam ) )
+        R2 = torch.tensor( [ [ 1, 0, 0 ],
+                             [ 0, torch.cos( beta ), torch.sin( beta ) ],
+                             [ 0, -torch.sin( beta ), torch.cos( beta ) ] ] ).float().to( device )
+
+    R2R1 = (R2 @ R1)  # 3 x 3
+    xj_12 = R2R1 @ xj_cam  # match_pts_2d rotated  # 3 x3 @ 3 x 1078
+
+    # TODO: vedere config degenerata sotto
+    # if np.abs( Xj[ :, 0 ] ) < zero_tol and np.abs( Xj[ :, 1 ] ) < zero_tol: # this should never happen: the camera would never see a point that is right on its center. Not sure what would be the right return val. I will add an assertion below
+    #     print( "Degenerate config" )
+    #     return R2R1.T
+
+    ctr_matches_directions = (C - Xj[ :, None, : ])[ :2 ]
+    assert torch.sum( torch.abs( ctr_matches_directions ), dim = 1 ).min() > 0, "Attempting to compute rotation from the same with center on a 3D point"
+    ctr_matches_directions = ctr_matches_directions / torch.linalg.norm( ctr_matches_directions, dim = 0 )[None ]
+    # (2 x n_angles x n_matches)
+    xj_12 = ( xj_12[ :2 ] / torch.linalg.norm( xj_12[ :2] , dim = 0 ) )[ :, None ]
+
+    csi = math.pi + torch.arccos( torch.sum( xj_12 * ctr_matches_directions, dim = 0 ) )
+
+    R3 = torch.stack( [
+        torch.stack( [ torch.cos( csi ), torch.sin( csi ), torch.zeros_like( csi ) ], dim = -1 ),
+        torch.stack( [ -torch.sin( csi ), torch.cos( csi ), torch.zeros_like( csi ) ], dim = -1 ),
+        torch.stack( [ torch.zeros_like( csi ), torch.zeros_like( csi ), torch.ones_like( csi ) ], dim = -1 )
+    ], dim = -2 )  # 360 x 1078 x 3 x 3
+
+    R = R3 @ R2R1
+
+    # region Fix determinant < 0
+    R_det = torch.linalg.det( R )
+    flag = R_det < 0
+    flag_reshaped = flag.reshape( flag.shape[ 0 ] * flag.shape[ 1 ] )
+    R_reshaped = R.reshape( R.shape[ 0 ] * R.shape[ 1 ], R.shape[ 2 ], R.shape[ 3 ] )
+    R_reshaped[ flag_reshaped, :, -1 ] = - R_reshaped[ flag_reshaped, :, -1 ]  # multiply last colum to -1
+    R = R_reshaped.reshape( R.shape[ 0 ], R.shape[ 1 ], R.shape[ 2 ], R.shape[ 3 ] )
+    # endregion
+
+    return torch.movedim(R, (0, 1, 2, 3), (1, 0, 3, 2))

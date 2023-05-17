@@ -4,10 +4,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import os
 from scipy.spatial.transform import Rotation
+import numpy as np
 
-def rgb_to_hex(rgb):
-    return '#%02x%02x%02x' % tuple(rgb)
-
+from utils.utils import rgb_to_hex
+from pose_estimation.utils.data_loading import get_point_cloud_info, get_ground_truth_poses
+from GSMC.gsmc_utils import qvec2rotmat
 
 def show_kp(img_path, pts, spatially_consistent=None, semantically_consistent=None, label=None, out_path=None,
             col=None, alpha=1):
@@ -105,3 +106,102 @@ def plot_poses(poses, gt_poses, ax=None, ratios=None):
 
     plt.show()
     return ax
+
+def plot_visibility_gt( slicepath, img_names ):
+
+
+    poses, names = get_ground_truth_poses( img_names, slicepath )
+
+
+    full3Dpoints = get_point_cloud_info(slicepath)
+    p3D = np.vstack( [ v.xyz for _, v in full3Dpoints.items() ] )
+    p_colors = np.array( [ rgb_to_hex(v.rgb) for _, v in full3Dpoints.items() ] )
+
+
+    # seen_points = []
+    # plot_col = []
+    # for pid, pinfo in full3Dpoints.items():
+    #     if np.sum((pinfo.xyz - c)**2) < 25**2:
+    #         seen_points.append(pinfo.xyz)
+    #         plot_col.append(pinfo.rgb)
+
+    # print(len(seen_points))
+
+    c = np.array( poses[ 4: ] )
+    rotmat = [ qvec2rotmat( pose[ :4 ] ) for pose in poses ]
+
+    fig = plt.figure(figsize=(20, 15))
+    ax = plt.axes(projection='3d')
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+
+    ax = _plot_3d_points( p3D, ax, p_colors, s=1 )
+    ax = _plot_3d_points( c.reshape((3, 1)), ax, 'red', s=15)
+    ax = _plot_camera( c, rotmat, ax )
+    # ax.scatter3D([pt[0] for pt in seen_points], [pt[1] for pt in seen_points], [pt[2] for pt in seen_points],
+    #              c=np.array([rgb_to_hex(col) for col in plot_col]), s=1)
+    # ax.scatter3D([c[0]], [c[1]], [c[2]],
+    #              c='red', s=15)
+
+    plt.show()
+
+def _plot_3d_points( pts_coords, ax, pts_colors=None, **kwargs ):
+    '''
+
+    :param pts_coords: (3, n_pts)
+    :param ax: image ax
+    :param pts_colors: (optional) colors for points, in hex
+    :return:
+    '''
+
+    pts_colors = pts_colors if not pts_colors is None else 'cornflowerblue'
+    ax.scatter3D( pts_coords[0], pts_coords[1], pts_coords[2], c=pts_colors, **kwargs )
+
+    return ax
+
+
+def _plot_3d_axis( center, dir, ax, axis_len = 10, color = None, **kwargs ):
+
+    ax.plot3D( [ center[0], center[0] + axis_len * dir[0] ],
+               [ center[1], center[1] + axis_len * dir[1] ],
+               [ center[2], center[2] + axis_len * dir[2] ],
+               color = color if not color is None else 'orange'
+               )
+    return ax
+
+def _plot_camera( center, rot, ax ):
+
+    _plot_3d_points( center.reshape((3,1)), ax, pts_colors = 'red' )
+    for i in range(3):
+        _plot_3d_axis( center, rot[:, i], color = 'black' if i < 2 else 'red' )
+
+    return ax
+    # if len(bestR)>0:
+    #     #     bestR = np.array(bestR)
+    #     #     camera_z_axis_pred = np.array(bestR).dot(np.array([0, 0, 1]))
+    #     #
+    #     #     # camera_z_axis = np.array(R_gt).dot(np.array([0,0,1]))
+    #     #     # ax.plot3D([bestC[0], bestC[0] + 10 * camera_z_axis_pred[0]], [bestC[1], bestC[1] + 10 * camera_z_axis_pred[1]], [bestC[2], bestC[2] + 10 * camera_z_axis_pred[2]], color='red')
+    #     #     # ax.plot3D([bestC[0], bestC[0] + 10 * camera_z_axis[0]], [bestC[1], bestC[1] + 10 * camera_z_axis[1]],
+    #     #     #           [bestC[2], bestC[2] + 10 * camera_z_axis[2]], color='cyan')
+    #     #     ax.plot3D([bestC[0], bestC[0] + 10 * bestR[0, 0]],
+    #     #               [bestC[1], bestC[1] + 10 * bestR[1, 0]],
+    #     #               [bestC[2], bestC[2] + 10 * bestR[2, 0]], color='cornflowerblue')
+    #     #     ax.plot3D([bestC[0], bestC[0] + 10 * bestR[0, 1]],
+    #     #               [bestC[1], bestC[1] + 10 * bestR[1, 1]],
+    #     #               [bestC[2], bestC[2] + 10 * bestR[2, 1]], color='cornflowerblue')
+    #     #     ax.plot3D([bestC[0], bestC[0] + 10 * R_gt[0, 0]],
+    #     #               [bestC[1], bestC[1] + 10 * R_gt[1, 0]],
+    #     #               [bestC[2], bestC[2] + 10 * R_gt[2, 0]], color='orange')
+    #     #     ax.plot3D([bestC[0], bestC[0] + 10 * R_gt[0, 1]],
+    #     #               [bestC[1], bestC[1] + 10 * R_gt[1, 1]],
+    #     #               [bestC[2], bestC[2] + 10 * R_gt[2, 1]], color='orange')
+    #     #
+    #     #     ax.plot3D([bestC[0], bestC[0] + 10 * R_gt[0, 2]],
+    #     #               [bestC[1], bestC[1] + 10 * R_gt[1, 2]],
+    #     #               [bestC[2], bestC[2] + 10 * R_gt[2, 2]], color='red')
+    #     #
+    #     #
+    return

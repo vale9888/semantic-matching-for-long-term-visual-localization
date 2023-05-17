@@ -248,7 +248,7 @@ def load_data(query_name, slicepath, slice, load_database=True):
     # collect all in a dictionary
     data_dict['camera_id'] = camera_id
     data_dict['camera_matrix'] = camera_matrix
-    data_dict['dist_coefs'] = dist_coefs
+    data_dict['dist_coefs'] = np.array( dist_coefs )
     data_dict['kp_priority'] = kp_priority
     data_dict['qkp'] = qkp
     data_dict['qdesc'] = q_descriptors
