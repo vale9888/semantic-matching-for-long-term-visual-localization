@@ -124,7 +124,8 @@ def compute_visibility_mask_torch( p3D, ctr_array, thr_low, thr_up, mid_camera_d
     # dist_matrix = np.array( [ np.linalg.norm( p3D - ctr, axis = 1 ) for ctr in ctr_array ] )  # dim: angles x n_pts  # for loop, dist
     # diff_matrix = np.array( [ p3D - ctr for ctr in ctr_array ] )  # dim: angles x n_pts x 3  # for loop, diff
 
-    diff_matrix = p3D[None] - ctr_array  # dim: angles x 3 x n_pts # broadcasting
+    # diff_matrix = p3D[None] - ctr_array  # dim: angles x 3 x n_pts # broadcasting   # old
+    diff_matrix = ctr_array - p3D[None]  # dim: angles x 3 x n_pts # broadcasting
     dist_matrix = torch.linalg.norm( diff_matrix, dim = 1 )  # dim: angles x n_pts
 
     dist_matrix_mask = torch.logical_and( dist_matrix > thr_low, dist_matrix < thr_up )  # n_angle x n_pts
@@ -326,7 +327,7 @@ def compute_projections( X_coords, ctr_array, phi, g_direction, x_dir, p3D, intr
                 + p2p1[None, :, None] * ( r2 + 2 * torch.square( p2D ) )
     # endregion
 
-    p2D_dh = torch.concatenate( [ p2D_d, torch.ones_like( r2 ) ], dim = 1 )
+    p2D_dh = torch.cat( [ p2D_d, torch.ones_like( r2 ) ], dim = 1 )
     p2D_dh = intrinsics @ p2D_dh  # (3, 3) @ (7000, 360, 3, 93000)
 
     p2D = p2D_dh[ :, :2, : ]  # dim: (360, 2, 92916) (angles, xy, n_pts)
@@ -379,7 +380,7 @@ def compute_projections_torch( rt_array, p3D, intrinsics, dist_coefs, device="cu
                 + p2p1[None, :, None] * ( r2 + 2 * torch.square( p2D ) )
     # endregion
 
-    p2D_dh = torch.concatenate( [ p2D_d, torch.ones_like( r2 ) ], dim = 1 )
+    p2D_dh = torch.cat( [ p2D_d, torch.ones_like( r2 ) ], dim = 1 )
     p2D_dh = intrinsics @ p2D_dh  # (3, 3) @ (7000, 360, 3, 93000)
 
     p2D = p2D_dh[ :, :2, : ]  # dim: (360, 2, 92916) (angles, xy, n_pts)
@@ -684,7 +685,7 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, point_cloud_info, z0, 
     p3D = np.stack( [ v.xyz for _, v in point_cloud_info.items() ], axis=-1 )
 
     # device = torch.device( "cuda:0" if torch.cuda.is_available() else "cpu" )
-    device = "cpu"
+    device = "cuda"
     print( f'Torch is using device: {device}' )
 
     # Convertiamo in torch
@@ -721,7 +722,7 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, point_cloud_info, z0, 
 
     tvec_nd = - torch.sum( rotmat_nd * ctr[ :, :, None ], dim = -1 )
 
-    rt_matrix = torch.concatenate( [ rotmat_nd, tvec_nd[ :, :, :, None ] ], dim = -1 )
+    rt_matrix = torch.cat( [ rotmat_nd, tvec_nd[ :, :, :, None ] ], dim = -1 )
 
     # p3D_h = to_homogeneous_torch( p3D, coord_axis = 0, device = device )  # (4, 92916)
 
@@ -740,7 +741,7 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, point_cloud_info, z0, 
     del ctr_x, ctr_y, ctr_z, ctr, rt_matrix, rotmat_nd, tvec_nd  # TODO: delete all useless tensor from now on
     torch.cuda.empty_cache()
 
-    batch_size = 4100  # 2048
+    batch_size = 2048  # 4100  # 2048
     rtc_dataloader = DataLoader( tensor_dataset, batch_size = batch_size, shuffle = False )
 
     thr_d_low, thr_d_up, mid_camera_directions, thr_cos_angle = get_visibility_thresholds_torch( point_cloud_info, device = device )
@@ -774,7 +775,7 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, point_cloud_info, z0, 
         center_mask = candidate_match_mask[ 0 ]
         pc_labels_curr = pc_labels[ pid_mask ]
 
-        visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ]
+        visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ].long()
         visible_pts_labels = query_mask[ visible_pts_coords[ :, 1 ], visible_pts_coords[ :, 0 ] ]
 
         equal_labels = (pc_labels_curr == visible_pts_labels)
