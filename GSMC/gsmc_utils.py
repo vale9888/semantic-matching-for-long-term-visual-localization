@@ -219,7 +219,6 @@ def get_rotation_matrix_nd( g_cam, xj_cam, C, Xj, zero_tol = 1e-3 ):
     return np.swapaxes( R, -1, -2 )
 
 
-
 def get_rotation_matrix_nd_torch( g_cam, xj_cam, C, Xj, zero_tol = 1e-6, device = None ):
     '''
     :param g_cam: (3, ) or (3,1) array containing the direction of gravity in camera coordinates
@@ -235,27 +234,27 @@ def get_rotation_matrix_nd_torch( g_cam, xj_cam, C, Xj, zero_tol = 1e-6, device 
     g_cam = g_cam / torch.linalg.norm( g_cam )
     xj_cam = xj_cam / torch.linalg.norm( xj_cam, dim = 0 )[ None ]
 
-    z_axis_cam = torch.Tensor( [ 0, 0, 1 ]).float().to(device)
+    z_axis_cam = torch.tensor( [ 0, 0, 1 ], device=device, dtype=torch.float32)
     if 1 - torch.abs( g_cam.dot( z_axis_cam ) ) < zero_tol:
         beta = 0.0 if g_cam.dot( z_axis_cam ) > 0 else math.pi
         R1 = torch.eye( 3, device = device )
         R2 = torch.tensor( [ [ 1, 0, 0 ],
                          [ 0, torch.cos( beta ), torch.sin( beta ) ],
-                         [ 0, -torch.sin( beta ), torch.cos( beta ) ] ] ).float().to(device)
+                         [ 0, -torch.sin( beta ), torch.cos( beta ) ] ], device=device, dtype=torch.float32 )
     else:
         n_cam = torch.cross( g_cam, z_axis_cam )
-        x_axis_cam = torch.Tensor( [ 1, 0, 0 ]).float().to(device)
-        y_axis_cam = torch.Tensor( [ 0, 1, 0 ]).float().to(device)
+        x_axis_cam = torch.tensor( [ 1, 0, 0 ], device=device, dtype=torch.float32 )
+        y_axis_cam = torch.tensor( [ 0, 1, 0 ], device=device, dtype=torch.float32 )
 
         alpha = torch.arctan( n_cam.dot( y_axis_cam ) / ( n_cam.dot( x_axis_cam ) + zero_tol ) ) #add a small eps to avoid division by zero
         R1 = torch.tensor([ [ torch.cos( alpha ), torch.sin( alpha ), 0 ],
                             [ -torch.sin( alpha ), torch.cos( alpha ), 0 ],
-                            [ 0, 0, 1 ] ] ).float().to( device )
+                            [ 0, 0, 1 ] ], device=device, dtype=torch.float32 )
 
         beta = torch.arccos( -g_cam.dot( z_axis_cam ) )
         R2 = torch.tensor( [ [ 1, 0, 0 ],
                              [ 0, torch.cos( beta ), torch.sin( beta ) ],
-                             [ 0, -torch.sin( beta ), torch.cos( beta ) ] ] ).float().to( device )
+                             [ 0, -torch.sin( beta ), torch.cos( beta ) ] ], device=device, dtype=torch.float32 )
 
     R2R1 = (R2 @ R1)  # 3 x 3
     xj_12 = R2R1 @ xj_cam  # match_pts_2d rotated  # 3 x3 @ 3 x 1078
