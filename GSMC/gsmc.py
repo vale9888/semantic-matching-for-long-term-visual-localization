@@ -732,15 +732,10 @@ def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g
                                    1
                                    ))
 
-    tensor_dataset = torch.utils.data.TensorDataset(rt_matrix_flat, ctr_flat)
-
     num_semantic_inliers = torch.zeros(rt_matrix.shape[0] * rt_matrix.shape[1], device=device)  # (bs, 1)
 
     del ctr_x, ctr_y, ctr_z, ctr, rt_matrix, rotmat_nd, tvec_nd  # TODO: delete all useless tensor from now on
     torch.cuda.empty_cache()
-
-    batch_size = 2048  # 3072  # 2048  # 4100  # 2048
-    rtc_dataloader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=False)
 
     thr_d_low, thr_d_up, mid_camera_directions, thr_cos_angle = get_visibility_thresholds_torch(point_cloud_info,
                                                                                                 device=device)
@@ -752,13 +747,22 @@ def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g
 
     print('Start')
     start_time = time.time()
+
+    batch_size = 2048  # 3072  # 2048  # 4100  # 2048
+    tensor_dataset = torch.utils.data.TensorDataset(rt_matrix_flat.to('cpu', non_blocking=True),
+                                                    ctr_flat.to('cpu', non_blocking=True))
+    rtc_dataloader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+
     for curr_idx, (curr_rt, curr_ctr) in enumerate(rtc_dataloader):
+        curr_rt = curr_rt.to('cuda', non_blocking=True)
+        curr_ctr = curr_ctr.to('cuda', non_blocking=True)
         analyse_images_torch(batch_size, camera_internals, dist_coefs, mid_camera_directions,
                              num_semantic_inliers, p3D, pc_labels, query_mask, curr_rt, curr_ctr, curr_idx, thr_cos_angle,
                              thr_d_low, thr_d_up, device, width, height)
+
     print(f'Duration: {time.time() - start_time}')
 
-    exit(0)
+    exit(0)  # TODO: delete line
 
 
 @torch.jit.script
@@ -790,19 +794,15 @@ def analyse_images_torch(batch_size:int, camera_internals, dist_coefs, mid_camer
 
     candidate_match_mask = torch.where(candidate_match_mask)
     pid_mask = candidate_match_mask[1]
-    # center_mask = candidate_match_mask[ 0 ]
-    # pc_labels_curr = pc_labels[ pid_mask ]
-    #
-    # visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ].int()
-    visible_pts_coords = p2D_curr[candidate_match_mask[0], :, candidate_match_mask[1]].int()
+    center_mask = candidate_match_mask[ 0 ]
+    pc_labels_curr = pc_labels[ pid_mask ]
+
+    visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ].int()
     visible_pts_labels = query_mask[visible_pts_coords[:, 1], visible_pts_coords[:, 0]]
 
-    equal_labels = (pc_labels[candidate_match_mask[0]] == visible_pts_labels)
-    # equal_labels = (pc_labels_curr == visible_pts_labels)
+    equal_labels = (pc_labels_curr == visible_pts_labels)
 
-    # scores = torch.bincount( center_mask, weights = equal_labels, minlength = curr_rt.shape[0] )
-    scores = torch.bincount(candidate_match_mask[0], weights=equal_labels, minlength=curr_rt.shape[0])
+    scores = torch.bincount( center_mask, weights = equal_labels, minlength = curr_rt.shape[0] )
 
     num_semantic_inliers[curr_idx * batch_size: (curr_idx + 1) * batch_size] = scores  # <-- stellina
-    # print(f'Other duration: {time.time() - start_time_in}')
 
