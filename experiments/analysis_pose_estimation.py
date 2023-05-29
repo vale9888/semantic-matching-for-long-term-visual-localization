@@ -15,15 +15,14 @@ import sys
 sys.path.append( os.path.dirname( os.path.dirname( os.path.realpath( __file__ ) ) ) )
 
 from pose_estimation.utils.matching import ratio_test
-from pose_estimation.utils.data_loading import _get_reference_images_info_binary
-from GSMC.gsmc_utils import get_point_cloud_info
-from GSMC.gsmc import GSMC_score
+from pose_estimation.utils.data_loading import get_ref_2D_data, get_point_cloud_info
+from GSMC.gsmc import GSMC_score, compute_gsmc_score_torch
 from experiments.analysis_matching import load_data, k_ratio_test
 from pose_estimation.utils.eval import compute_pose_errors
 from pose_estimation.RANSAC_custom import p3p_biased_RANSAC, p3p_robust_biased_sampling_and_consensus
 from fine_grained_segmentation.utils.file_parsing.read_write_model import read_images_binary
 
-rootname = '/home/valentinas98/repos/semantic-matching-for-long-term-visual-localization'  # os.path.dirname(os.path.dirname(os.path.dirname( __file__ )))
+rootname = os.path.dirname( os.path.dirname(os.path.realpath(__file__)) )
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
@@ -125,90 +124,136 @@ height = 768
     #                                                camera_internals, dist_coefs, n_angles = n_angles )
 
 
-def funzioncina( kp_priority, camera_matrix, width, height, kplus1_nearest_matches, qkp, full3Dpoints, db_p3D_ids,
-                 g_direction, dist_coefs, query_mask, z0, window, ratio_threshold, largest_score ):
-    gsmc_scores = 0
-    matches_kNN_semanticratio = [ ]
-    all_ratios = [ ]
+# def funzioncina( kp_priority, camera_matrix, width, height, kplus1_nearest_matches, qkp, full3Dpoints, db_p3D_ids,
+#                  g_direction, dist_coefs, query_mask, z0, window, ratio_threshold, largest_score ):
+#     gsmc_scores = 0
+#     matches_kNN_semanticratio = [ ]
+#     all_ratios = [ ]
+#
+#     matches_GSMC = [ ]
+#     filtered_scores = [ ]
+#
+#     matches_SSMC = [ ]
+#
+#     for qkp_idx in kp_priority:
+#
+#         m = kplus1_nearest_matches[ qkp_idx ][ :-1 ]
+#         ratios = [ ]
+#
+#         for neighbor_idx, putative_match in enumerate( m ):
+#
+#             qkp_x = min( round( qkp[ qkp_idx ][ 0 ] ), width - 1 )
+#             qkp_y = min( round( qkp[ qkp_idx ][ 1 ] ), height - 1 )
+#
+#             sem = full3Dpoints[ db_p3D_ids[ putative_match.trainIdx ] ].semantic_label
+#
+#             # region refactoring GSMC 3D
+#             # p3D = extract_point_cloud_coords( full3Dpoints )
+#             # score, n_visible_points, ctr, ctr_id = compute_GSMC_score_compiled( np.array( [ qkp_x, qkp_y ] ), db_p3D_ids[ putative_match.trainIdx ], z0,
+#             #                              g_direction, camera_matrix,
+#             #                              dist_coefs, query_mask, p3D, full3Dpoints )
+#             # continue
+#             # endregion
+#
+#             if neighbor_idx == 0 and query_mask[ qkp_y, qkp_x ] == sem:
+#                 matches_SSMC.append( putative_match )
+#
+#             if (window < qkp_x < width - window and window < qkp_y < height - window and \
+#                 sem in query_mask[ qkp_y - window:qkp_y + window, qkp_x - window:qkp_x + window ]) or \
+#                     not (window < qkp_x < width - window and window < qkp_y < height - window):
+#
+#                 score, _, _, totPointCounts, _ = GSMC_score( qkp[ qkp_idx ], db_p3D_ids[ putative_match.trainIdx ],
+#                                                              full3Dpoints, g_direction, camera_matrix, dist_coefs,
+#                                                              query_mask, slicepath, z0 = z0 )
+#
+#                 gsmc_scores += 1
+#                 if gsmc_scores % 100 == 0:
+#                     print( "Computed %d scores " % (gsmc_scores) )
+#
+#                 if totPointCounts > 0 and score / totPointCounts > ratio_threshold:
+#                     ratios.append( score / totPointCounts )
+#                 else:
+#                     ratios.append( 0 )
+#
+#                 if neighbor_idx == 0 and putative_match.distance < 0.9 * m[ 1 ].distance:
+#                     matches_GSMC.append( putative_match )
+#                     filtered_scores.append( score )
+#
+#
+#             else:
+#                 ratios.append( 0 )
+#
+#                 if neighbor_idx == 0 and putative_match.distance < 0.9 * m[ 1 ].distance:
+#                     score, _, _, totPointCounts, _ = GSMC_score( qkp[ qkp_idx ],
+#                                                                  db_p3D_ids[ putative_match.trainIdx ],
+#                                                                  full3Dpoints, g_direction, camera_matrix,
+#                                                                  dist_coefs, query_mask, slicepath,
+#                                                                  z0 = z0 )  # , use_covisibility=True,
+#                     # img_data=img_data)
+#                     gsmc_scores += 1
+#                     if gsmc_scores % 100 == 0:
+#                         print( "Computed %d scores " % (gsmc_scores) )
+#
+#                     matches_GSMC.append( putative_match )
+#                     filtered_scores.append( score )
+#
+#         # if largest_score:
+#         #     top_idx = np.argmax( ratios )
+#         #     all_ratios.append( ratios[ top_idx ] )
+#         #     matches_kNN_semanticratio.append( m[ top_idx ] )
+#         #
+#         # else:
+#         #     all_ratios += [ r for r in ratios if r != 0 ]
+#         #     matches_kNN_semanticratio += [ match for c, match in enumerate( m ) if ratios[ c ] != 0 ]
 
-    matches_GSMC = [ ]
-    filtered_scores = [ ]
 
-    matches_SSMC = [ ]
+def estimate_pose( match_pts_2d, match_pts_3d, sampling_weights, internals, dist_coefs, R_gt, c_gt,
+                   reprojection_err = 8, n_iterations = 10000, inlier_weights = None ):
+    '''
 
-    for qkp_idx in kp_priority:
+    :param inlier_weights:
+    :param match_pts_2d:
+    :param match_pts_3d:
+    :param sampling_weights:
+    :param reprojection_err:
+    :param dist_coefs:
+    :param internals:
+    :return:
+    '''
 
-        m = kplus1_nearest_matches[ qkp_idx ][ :-1 ]
-        ratios = [ ]
+    assert len( match_pts_3d ) == len( match_pts_2d )
 
-        for neighbor_idx, putative_match in enumerate( m ):
+    position_err = -1
+    rotation_err = -1
+    n_inliers = 0
+    success = False
+    rvec_est = None
+    tvec_est = None
+    inliers = None
 
-            qkp_x = min( round( qkp[ qkp_idx ][ 0 ] ), width - 1 )
-            qkp_y = min( round( qkp[ qkp_idx ][ 1 ] ), height - 1 )
+    if len( match_pts_3d ) >= 4:
+        success, rvec_est, tvec_est, inliers = p3p_biased_RANSAC( match_pts_2d, match_pts_3d,
+                                                                  sampling_weights = sampling_weights,
+                                                                  num_iterations = n_iterations,
+                                                                  r = reprojection_err,
+                                                                  camera_matrix = internals,
+                                                                  dist_coeff = dist_coefs,
+                                                                  inlier_weights=inlier_weights)
+    if rvec_est is not None:
+        R_est = cv.Rodrigues( rvec_est )[ 0 ]
+        c_est = - np.matmul( R_est.T, tvec_est ).flatten()
+        position_err, rotation_err = compute_pose_errors( R_gt, R_est, c_gt, c_est )
+        n_inliers = sum( inliers )
 
-            sem = full3Dpoints[ db_p3D_ids[ putative_match.trainIdx ] ].semantic_label
-
-            # region refactoring GSMC 3D
-            # p3D = extract_point_cloud_coords( full3Dpoints )
-            # score, n_visible_points, ctr, ctr_id = compute_GSMC_score_compiled( np.array( [ qkp_x, qkp_y ] ), db_p3D_ids[ putative_match.trainIdx ], z0,
-            #                              g_direction, camera_matrix,
-            #                              dist_coefs, query_mask, p3D, full3Dpoints )
-            # continue
-            # endregion
-
-
-
-            if neighbor_idx == 0 and query_mask[ qkp_y, qkp_x ] == sem:
-                matches_SSMC.append( putative_match )
-
-            if (window < qkp_x < width - window and window < qkp_y < height - window and \
-                sem in query_mask[ qkp_y - window:qkp_y + window, qkp_x - window:qkp_x + window ]) or \
-                    not (window < qkp_x < width - window and window < qkp_y < height - window):
-
-                score, _, _, totPointCounts, _ = GSMC_score( qkp[ qkp_idx ], db_p3D_ids[ putative_match.trainIdx ],
-                                                             full3Dpoints, g_direction, camera_matrix, dist_coefs,
-                                                             query_mask, slicepath, z0 = z0 )
-
-                gsmc_scores += 1
-                if gsmc_scores % 100 == 0:
-                    print( "Computed %d scores " % (gsmc_scores) )
-
-                if totPointCounts > 0 and score / totPointCounts > ratio_threshold:
-                    ratios.append( score / totPointCounts )
-                else:
-                    ratios.append( 0 )
-
-                if neighbor_idx == 0 and putative_match.distance < 0.9 * m[ 1 ].distance:
-                    matches_GSMC.append( putative_match )
-                    filtered_scores.append( score )
+    return [ success, position_err, rotation_err, n_inliers ]
 
 
-            else:
-                ratios.append( 0 )
-
-                if neighbor_idx == 0 and putative_match.distance < 0.9 * m[ 1 ].distance:
-                    score, _, _, totPointCounts, _ = GSMC_score( qkp[ qkp_idx ],
-                                                                 db_p3D_ids[ putative_match.trainIdx ],
-                                                                 full3Dpoints, g_direction, camera_matrix,
-                                                                 dist_coefs, query_mask, slicepath,
-                                                                 z0 = z0 )  # , use_covisibility=True,
-                    # img_data=img_data)
-                    gsmc_scores += 1
-                    if gsmc_scores % 100 == 0:
-                        print( "Computed %d scores " % (gsmc_scores) )
-
-                    matches_GSMC.append( putative_match )
-                    filtered_scores.append( score )
-
-        # if largest_score:
-        #     top_idx = np.argmax( ratios )
-        #     all_ratios.append( ratios[ top_idx ] )
-        #     matches_kNN_semanticratio.append( m[ top_idx ] )
-        #
-        # else:
-        #     all_ratios += [ r for r in ratios if r != 0 ]
-        #     matches_kNN_semanticratio += [ match for c, match in enumerate( m ) if ratios[ c ] != 0 ]
-
+def save_exp_results( query_name, experiment_type, k, ratio_threshold, matches_in, pose_results, exp_name ):
+    if not exp_name is None:
+        gsheet = GSheet( worksheet_name = exp_name )
+        values = [ query_name, experiment_type, str(k),
+                   str(ratio_threshold), str(matches_in) ] + [str(el) for el in pose_results]
+        gsheet.store_row( values )
 
 def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, height=768, width=1024, window=15, largest_score=False):
     stats_df = pd.DataFrame([], columns=['img_name',  'experiment_type','k', 'ratio_test', 'matches_in', 'matches_in_effective','success', 'inliers', 'position_error', 'orientation_error'])
@@ -254,6 +299,14 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
 
         # endregion
 
+        # region fast debugging only
+        qkp = qkp[:30]
+        q_descriptors = q_descriptors[:30]
+        # endregion
+
+        n_qkp = qkp.shape[ 0 ]
+
+
         # region (2) Set up matches
         flann_matcher = cv.FlannBasedMatcher(dict(algorithm=1, trees=5), dict(checks=50))
         kplus1_nearest_matches = flann_matcher.knnMatch(q_descriptors.astype(np.float32), db_descriptors.astype(np.float32),
@@ -272,33 +325,35 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
         matches_GSMC = []
         filtered_scores = []
 
-        matches_SSMC = []
-
-        # region refactoring 2
-        # x_dir = np.linalg.inv( camera_internals ).dot( np.array( [ p2Dj[ 0 ], p2Dj[ 1 ], 1 ] ) )
-        #
-        # alpha = np.arccos( np.array( g_direction ).dot( x_dir ) ) - np.pi / 2
-        # X_coords = np.array( point_cloud_info[ p3Dj ].xyz )
-        # if z0 is None:
-        #     z0 = z0_dict[ str( p3Dj ) ]
-        # R = np.abs( X_coords[ 2 ] - z0 ) / np.abs( np.tan( alpha ) )
-        # C = np.array( [ X_coords[ 0 ] + R, X_coords[ 1 ], z0 ] )
-        match_ids = np.asarray([ (match.queryIdx, match.trainIdx) for match in matches_1NN_ratio09 ]).T
-        match_pts_2d = qkp[ match_ids[ 0 ] ][ :, :2 ]  # p2Dj
-        match_pts_3d = np.asarray( [ full3Dpoints[ db_p3D_ids[ m_id ] ].xyz for m_id in match_ids[ 1 ] ] )  # p3Dj
-
-        compute_gsmc_score_torch( match_pts_2d, match_pts_3d, full3Dpoints, z0, g_direction, camera_matrix, dist_coefs,
-                                  query_mask, c_gt=c_gt, R_gt=R_gt)
-
-        # GSMC_score( p2Dj, p3Dj, point_cloud_info, g_direction, camera_internals, dist_coefs, query_mask, slicepath,
-        #             z0 = None,
-        #             z0_dict = None, exact_filtering = True, use_covisibility = False, img_data = None )
-
-        # funzioncina( kp_priority, camera_matrix, width, height, kplus1_nearest_matches, qkp, full3Dpoints, db_p3D_ids,
-        #              g_direction, dist_coefs, query_mask, z0, window, ratio_threshold, largest_score )
-        # exit(0)
+        # any additional masks for other matching strategies
         # endregion
 
+        scores, bestCs, bestRs, totPointCounts = compute_gsmc_score_torch( match_pts_2d, match_pts_3d, full3Dpoints,
+                                                                           all_p3D, z0, g_direction, camera_matrix,
+                                                                           dist_coefs, query_mask,
+                                                                           n_angles = 180)
+
+        ratios = np.divide( scores, totPointCounts, out=np.zeros_like(scores),
+                            where = totPointCounts > 0 )  # sets to 0 where totPointCounts is zero
+
+        # setup our methods masks
+        # 0. add two base checks: ssmc + visibilitymc
+        # pad_query_mask = np.pad( query_mask, smc_window_size, 'constant', constant_values = -1 )
+
+        match_px_2d_inf = np.clip( match_pts_2d - smc_window_size, a_min = 0, a_max = np.inf  ).astype(int)
+        match_px_2d_sup = np.stack( [ np.clip( match_pts_2d[ :,0] + smc_window_size, a_min = -np.inf, a_max = height ), np.clip( match_pts_2d[:, 1] + smc_window_size, a_min = -np.inf, a_max = width )], axis = 1 ).astype(int)
+        all_neighboring_labels = query_mask[ match_px_2d_inf[:, 1]:match_px_2d_sup[:, 1], match_px_2d_inf[:, 0]:match_px_2d_sup[:, 0] ]
+        match_lab_3d = all_3d_sem_labels[ matches_ids[ :, 1 ] ][:,None]
+        smc_mask = (match_lab_3d == all_neighboring_labels).any(axis=1)
+
+        sm_thresh = 0.2
+        match_sm_thresh_mask = (ratios > sm_thresh) & smc_mask
+
+        best_ratios_ids = np.argmax( ratios.reshape( (-1, k) ), axis = 1 ) + k * np.arange( n_qkp )
+        match_sm_best_mask = np.zeros_like( match_sm_thresh_mask )
+        match_sm_best_mask[ best_ratios_ids ] = True
+        # adding absolute threshold on top
+        match_sm_best_mask[ ratios < sm_thresh ] = False
 
 
         # endregion
@@ -396,120 +451,13 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
             ransac_dict['pts_3d'] = p3D
             ransac_dict['pts_2d'] = p2D
 
-            success_kNN_sem_biased, rvec_kNN_sem_biased, tvec_kNN_sem_biased, inliers_kNN_sem_biased = p3p_biased_RANSAC(ransac_dict,
-                                                                                                                         all_ratios, 10000, reprojection_error)
-        else:
-            success_kNN_sem_biased = False
-            inliers_kNN_sem_biased = [0]
-            rvec_kNN_sem_biased = []
-
-
-        if p2D.shape[0] >= 4:
-            ransac_dict['pts_3d'] = p3D
-            ransac_dict['pts_2d'] = p2D
-
-            success_sem_biased2, rvec_sem_biased2, tvec_sem_biased2, inliers_sem_biased2 = p3p_robust_biased_sampling_and_consensus(ransac_dict,
-                                                                                                         all_ratios, 10000, reprojection_error)
-        else:
-            success_sem_biased2 = False
-            inliers_sem_biased2 = [0]
-            rvec_sem_biased2 = []
-
-        # endregion
-
-        # save success, position error, rotation error, number of inliers, number of inliers that are real inliers?
-        if success_1NN or len(rvec_1NN)>0:
-            R_pred_1NN = cv.Rodrigues(rvec_1NN)[0]
-            c_pred_1NN = - np.matmul(R_pred_1NN.T, tvec_1NN).flatten()
-            position_error_1NN, rotation_error_1NN = compute_pose_errors(R_gt, R_pred_1NN, c_gt, c_pred_1NN)
-        else:
-            position_error_1NN = -1
-            rotation_error_1NN = -1
-            inliers_1NN = []
-
-        if success_kNN or len(rvec_kNN)>0:
-            R_pred_kNN = cv.Rodrigues(rvec_kNN)[0]
-            c_pred_kNN = - np.matmul(R_pred_kNN.T, tvec_kNN).flatten()
-            position_error_kNN, rotation_error_kNN = compute_pose_errors(R_gt, R_pred_kNN, c_gt, c_pred_kNN)
-        else:
-            position_error_kNN = -1
-            rotation_error_kNN = -1
-            inliers_kNN = []
-
-
-
-        if success_SSMC or len(rvec_SSMC)>0:
-            R_pred_SSMC = cv.Rodrigues(rvec_SSMC)[0]
-            c_pred_SSMC =  - np.matmul(R_pred_SSMC.T, tvec_SSMC).flatten()
-            position_error_SSMC, rotation_error_SSMC = compute_pose_errors(R_gt, R_pred_SSMC, c_gt,
-                                                                                 c_pred_SSMC)
-        else:
-            position_error_SSMC = -1
-            rotation_error_SSMC = -1
-            inliers_SSMC = []
-
-        if success_kNN_sem or len(rvec_kNN_sem)>0:
-            R_pred_kNN_sem = cv.Rodrigues(rvec_kNN_sem)[0]
-            c_pred_kNN_sem = - np.matmul(R_pred_kNN_sem.T, tvec_kNN_sem).flatten()
-            position_error_kNN_sem, rotation_error_kNN_sem = compute_pose_errors(R_gt, R_pred_kNN_sem, c_gt,
-                                                                                 c_pred_kNN_sem)
-        else:
-            position_error_kNN_sem = -1
-            rotation_error_kNN_sem = -1
-            inliers_kNN_sem = []
-
-        if success_GSMC or len(rvec_GSMC)>0:
-            R_pred_1NN_biased = cv.Rodrigues(rvec_GSMC)[0]
-            c_pred_1NN_biased = - np.matmul(R_pred_1NN_biased.T, tvec_GSMC).flatten()
-            position_error_1NN_biased, rotation_error_1NN_biased = compute_pose_errors(R_gt, R_pred_1NN_biased, c_gt,
-                                                                                       c_pred_1NN_biased)
-        else:
-            position_error_1NN_biased = -1
-            rotation_error_1NN_biased = -1
-
-        if success_kNN_sem_biased or len(rvec_kNN_sem_biased)>0:
-            R_pred_sem_biased = cv.Rodrigues(rvec_kNN_sem_biased)[0]
-            c_pred_sem_biased = - np.matmul(R_pred_sem_biased.T, tvec_kNN_sem_biased).flatten()
-            position_error_sem_biased, rotation_error_sem_biased = compute_pose_errors(R_gt, R_pred_sem_biased, c_gt,
-                                                                                       c_pred_sem_biased)
-        else:
-            position_error_sem_biased = -1
-            rotation_error_sem_biased = -1
-
-        if success_sem_biased2 or len(rvec_sem_biased2)>0:
-            R_pred_sem_biased2 = cv.Rodrigues(rvec_sem_biased2)[0]
-            c_pred_sem_biased2 = - np.matmul(R_pred_sem_biased2.T, tvec_sem_biased2).flatten()
-            position_error_sem_biased2, rotation_error_sem_biased2 = compute_pose_errors(R_gt, R_pred_sem_biased2, c_gt,c_pred_sem_biased2)
-        else:
-            position_error_sem_biased2 = -1
-            rotation_error_sem_biased2 = -1
-
-
-        query_stats = pd.DataFrame()
-        #['img_name',  'experiment_type', 'k', 'ratio_test',  'matches_in', 'success', 'inliers', 'position_error', 'orientation_error']
-        query_stats['img_name'] = [query_name for i in range(7)]
-        query_stats['experiment_type'] = ['1NN', 'kNN', 'kNN_sem', 'SSMC', 'GSMC', 'sem_biased', 'sem_biased_sampling_and_consensus']
-        query_stats['k'] = [1, k, k, 1, 1, k, k]
-        query_stats['ratio_test'] = [0.9, 0.9, 1, 1, 0.9, 1, 1]
-        query_stats['matches_in'] = [ len(matches_1NN_ratio09), len(matches_kNN_ratio09), len(matches_kNN_semanticratio), len(matches_SSMC), len(matches_GSMC), len(matches_kNN_semanticratio), len(matches_kNN_semanticratio)]
-        query_stats['matches_in_effective'] = [len(matches_1NN_ratio09), len(matches_kNN_ratio09), len([m for m in all_ratios if m>ratio_threshold]), len(matches_SSMC), len([m for m in filtered_scores if m>0]), len([m for m in all_ratios if m>ratio_threshold]), len([m for m in all_ratios if m>ratio_threshold])]
-        query_stats['success'] = [success_1NN, success_kNN, success_kNN_sem, success_SSMC, success_GSMC, success_kNN_sem_biased, success_sem_biased2]
-        query_stats['inliers'] = [sum(inliers_1NN),  sum(inliers_kNN), sum(inliers_kNN_sem), sum(inliers_SSMC), sum(inliers_GSMC), sum(inliers_kNN_sem_biased), sum(inliers_sem_biased2)]
-        query_stats['position_error'] = [position_error_1NN, position_error_kNN, position_error_kNN_sem, position_error_SSMC,position_error_1NN_biased, position_error_sem_biased, position_error_sem_biased2]
-        query_stats['orientation_error'] = [rotation_error_1NN, rotation_error_kNN, rotation_error_kNN_sem, rotation_error_SSMC, rotation_error_1NN_biased, rotation_error_sem_biased, rotation_error_sem_biased2]
-
-        stats_df = pd.concat([stats_df, query_stats], axis=0 )
-
-    return stats_df
-
-
-if __name__ == '__main__':
-    # Add your repo path
-    my_repo_path = '/home/valentinas98/repos/semantic-matching-for-long-term-visual-localization'
-    slicepath = my_repo_path + '/data/Extended-CMU-Seasons/slice25'
+# Below some individual experiments of interest
+def exp1():
+    "Slice 25, 5 imgs, debugging purposes"
+    slicepath = rootname + '/data/Extended-CMU-Seasons/slice25'
     slice = '25'
 
-    k = 4
+    k = 2
 
     # with open(os.path.join(slicepath, 'traversals.json'), 'r') as f:
     #     traversals_dict = json.load(f)
@@ -525,17 +473,45 @@ if __name__ == '__main__':
     # with open(os.path.join( my_repo_path, 'experiments/repeated_structures_queries_2022_08_22_18_23_57_c0_slice22_70imgs.txt' ), 'r') as f:
     #     query_names = [n[:-1] for n in f.readlines()]
 
-    query_df = pd.read_csv(
-        os.path.join( rootname, 'experiments/match_scarcity_queries_slice25_100imgs_2023_05_08_23_37.csv' ) )
-    query_names = query_df.img_name
+    # query_df = pd.read_csv(
+    #     os.path.join( rootname, 'experiments/match_scarcity_queries_slice25_100imgs_2023_05_08_23_37.csv' ) )
+    # query_names = query_df.img_name
 
-    now = str(datetime.datetime.now()).replace('-', '_').replace(':', '_').replace(' ', '_')[:-7]
-    stats_dirname = f'exp_k{k}_n_queries{len(query_names)}_date{now}/'
-    stats_dirname = os.path.join(my_repo_path, 'pose_estimation/results/pose_est_comparisons',
-                                 stats_dirname)
+    query_names = [ 'img_05463_c1_1311875340184523us.jpg',
+                    'img_05474_c0_1311875343317817us.jpg',
+                    'img_05492_c0_1311875348517892us.jpg',
+                    'img_05495_c0_1311875349317851us.jpg',
+                    'img_05497_c0_1311875349917905us.jpg'
+                    ]
 
-    if not os.path.exists(stats_dirname):
-        os.mkdir(stats_dirname)
+    now = str( datetime.datetime.now() ).replace( '-', '_' ).replace( ':', '_' ).replace( ' ', '_' )[ :-7 ]
+    exp_name = f'exp_k{k}_n_queries{len( query_names )}_slice{slice}_date{now}/'
+    # stats_dirname = os.path.join( rootname, 'pose_estimation/results/pose_est_comparisons',
+    #                               stats_dirname )
 
-    get_stats(query_names, k, slicepath, slice, stats_dirname, largest_score=True)
+    # if not os.path.exists( stats_dirname ):
+    #     os.mkdir( stats_dirname )
 
+    get_stats( query_names, k, slicepath, slice, exp_name )
+    # stats.to_csv( stats_dirname )
+
+def exp2( dry_run=True ):
+    "Slice 22, same queries with huge MS as the thesis"
+    slicepath = rootname + '/data/Extended-CMU-Seasons/slice22'
+    slice = '22'
+
+    k = 4
+
+
+    results_df = pd.read_csv( os.path.join( rootname, 'pose_estimation/results/pose_est_comparisons/exp_k4_n_queries101_date2022_08_23_09_28_57/pose_est_stats.csv') )
+
+    query_names = results_df.img_name.unique()[11:]
+
+    now = str( datetime.datetime.now() ).replace( '-', '_' ).replace( ':', '_' ).replace( ' ', '_' )[ :-7 ]
+    exp_name = f'exp2_k{k}_n_queries{len( query_names )}_slice{slice}_date{now}/' if not dry_run else None
+    get_stats( query_names, k, slicepath, slice, exp_name )
+
+
+if __name__ == '__main__':
+    # exp2( dry_run = False )
+    exp1()
