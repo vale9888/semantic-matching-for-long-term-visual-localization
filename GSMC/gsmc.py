@@ -84,8 +84,8 @@ def compute_visibility_mask(p3D, ctr_array, point_cloud_info):
     # dist_matrix = np.array( [ np.linalg.norm( p3D - ctr, axis = 1 ) for ctr in ctr_array ] )  # dim: angles x n_pts  # for loop, dist
     # diff_matrix = np.array( [ p3D - ctr for ctr in ctr_array ] )  # dim: angles x n_pts x 3  # for loop, diff
 
-    diff_matrix = p3D[None,] - ctr_array[:, None, ]  # dim: angles x n_pts x 3  # broadcasting
-    dist_matrix = np.linalg.norm(diff_matrix, axis=-1)  # dim: angles x n_pts
+    diff_matrix = ctr_array[ :, None, ] - p3D[ None, ]  # dim: angles x n_pts x 3  # broadcasting
+    dist_matrix = np.linalg.norm( diff_matrix, axis = -1 )  # dim: angles x n_pts
 
     thr_low = np.hstack([v.dlow for _, v in point_cloud_info.items()])
     thr_up = np.hstack([v.dup for _, v in point_cloud_info.items()])
@@ -101,22 +101,20 @@ def compute_visibility_mask(p3D, ctr_array, point_cloud_info):
 
     visibility_mask = np.logical_and(dist_matrix_mask, angle_mask)
 
-    # return visibility_mask  # TODO: check angle filtering
-    return dist_matrix_mask
-
+    return visibility_mask
 
 def get_visibility_thresholds_torch(point_cloud_info, device="cuda"):
     thr_d_low = torch.tensor([v.dlow for _, v in point_cloud_info.items()], device=device, dtype=torch.float32)
     thr_d_up = torch.tensor([v.dup for _, v in point_cloud_info.items()], device=device, dtype=torch.float32)
 
     mid_camera_directions = torch.stack(
-        [torch.from_numpy(v.v).to(device=device, dtype=torch.float32) for _, v in point_cloud_info.items()],
-        dim=-1)  # n_pts x 3
-    thr_angle = torch.tensor([v.theta for _, v in point_cloud_info.items()], device=device,
-                             dtype=torch.float32)  # n_pts
-    thr_cos_angle = torch.cos(thr_angle)  # n_pts
+        [ torch.from_numpy( v.v ).to( device = device, dtype = torch.float32 ) for _, v in point_cloud_info.items() ],
+        dim = -1 )  # n_pts x 3
+    thr_full_angle = torch.tensor( [ v.theta for _, v in point_cloud_info.items() ], device = device,
+                                   dtype = torch.float32 )  # n_pts
+    thr_cos_angle_from_mid = torch.cos( thr_full_angle / 2 )  # n_pts
 
-    return thr_d_low, thr_d_up, mid_camera_directions, thr_cos_angle
+    return thr_d_low, thr_d_up, mid_camera_directions, thr_cos_angle_from_mid
 
 
 # @my_timeit
@@ -405,9 +403,8 @@ def get_match_specific_params(match_2d_hcoords, match_3d_coords, g_direction, z0
 
 
 # @my_timeit
-def extract_point_cloud_coords(point_cloud_info):
-    ## Function 'extract_point_cloud_coords' executed in 4.262584s
-    return np.stack([v.xyz for _, v in point_cloud_info.items()], axis=0)
+def extract_point_cloud_coords( point_cloud_info ):
+    return np.stack( [ v.xyz for _, v in point_cloud_info.items() ], axis = 0 )
 
 
 # @my_timeit
@@ -436,17 +433,16 @@ def compute_GSMC_score_compiled(match_2d_coords, match_3d_id, z0, g_direction, c
 
     # points_3d_coords = coarse_filter_point_cloud_coords( R, match_3d_coords, points_3d_coords )
 
-    print("ciao ci siamo")
-    p2D, rt_array = compute_projections(match_3d_coords, ctr_array, phi, g_direction, x_direction, points_3d_coords,
-                                        camera_internals, dist_coefs, n_angles=n_angles)
-    p2D, rt_array = compute_projections(match_3d_coords, ctr_array, phi, g_direction, x_direction, points_3d_coords,
-                                        camera_internals, dist_coefs, n_angles=n_angles, device='cpu')
+    p2D, rt_array = compute_projections( match_3d_coords, ctr_array, phi, g_direction, x_direction, points_3d_coords,
+                                         camera_internals, dist_coefs, n_angles = n_angles )
+    p2D, rt_array = compute_projections( match_3d_coords, ctr_array, phi, g_direction, x_direction, points_3d_coords,
+                                         camera_internals, dist_coefs, n_angles = n_angles, device = 'cpu' )
     # exit(0)
 
     visibility_mask = compute_visibility_mask(points_3d_coords, ctr_array, point_cloud_info)
 
-    p2D = np.array(p2D)
-    p2D = np.rint(p2D).astype(np.int32)  # TODO: vediamo se con int32 o int64 va più veloce
+    p2D = np.array( p2D )
+    p2D = np.rint( p2D ).astype( np.int32 )
 
     # Verify which point projections fall into the image
     img_plane_mask = np.logical_and(p2D > np.zeros_like(p2D),
@@ -463,12 +459,8 @@ def compute_GSMC_score_compiled(match_2d_coords, match_3d_id, z0, g_direction, c
     center_mask = candidate_match_mask[0]
     pc_labels = pc_labels[pid_mask]
 
-    visible_pts_coords = p2D[center_mask, :, pid_mask]
-    visible_pts_labels = query_mask[visible_pts_coords[:, 1], visible_pts_coords[:, 0]]
-    #
-    # [ query_mask[ p2D[ phi ][ 1 ][ candidate_match_mask[ phi ] ],
-    #                                p2D[ phi ][ 0 ][ candidate_match_mask[ phi ] ] ]
-    #                    for phi in range( n_angles ) ]
+    visible_pts_coords = p2D[ center_mask, :, pid_mask ]
+    visible_pts_labels = query_mask[ visible_pts_coords[ :, 1 ], visible_pts_coords[ :, 0 ] ]
 
     equal_labels = (pc_labels == visible_pts_labels)
 
@@ -500,14 +492,14 @@ def GSMC_score(p2Dj, p3D_id, point_cloud_info, g_direction, camera_internals, di
     all_p3D=None: array containing all point coordinates - pass to avoid re-loading at every match iteration
     """
 
-    # region Refactoring numba
-    match_2d_coords = p2Dj
-    match_3d_id = p3D_id
-    points_3d_coords = extract_point_cloud_coords(point_cloud_info)
-
-    compute_GSMC_score_compiled(match_2d_coords, match_3d_id, z0, g_direction, camera_internals, dist_coefs,
-                                query_mask, points_3d_coords, point_cloud_info, n_angles=360)
-    # endregion
+    # # region Refactoring numba
+    # match_2d_coords = p2Dj
+    # match_3d_id = p3D_id
+    # points_3d_coords = extract_point_cloud_coords(point_cloud_info)
+    #
+    # compute_GSMC_score_compiled(match_2d_coords, match_3d_id, z0, g_direction, camera_internals, dist_coefs,
+    #                             query_mask, points_3d_coords, point_cloud_info, n_angles=360)
+    # # endregion
 
     bestScore = 0
     bestC = []
@@ -605,36 +597,30 @@ def GSMC_score(p2Dj, p3D_id, point_cloud_info, g_direction, camera_internals, di
 
         phi = 0
 
-        # region Refactoring
-        n_angles = 360
-
-        p3D, p2D, ctr_array = compute_projections_old(X_coords, R, z0, g_direction, x_dir, point_cloud_info,
-                                                      camera_internals, dist_coefs, n_angles=n_angles)
-        visibility_mask = compute_visibility_mask(p3D, ctr_array, point_cloud_info)
-
-        p2D = np.rint(p2D).astype(np.int32)  # TODO: vediamo se con int32 o int64 va più veloce
-
-        # Verify which point projections fall into the image
-        img_plane_mask = np.logical_and(p2D > np.zeros_like(p2D),
-                                        p2D < np.array([width, height])[None, :, None]
-                                        ).all(axis=1)
-
-        candidate_match_mask = np.logical_and(visibility_mask, img_plane_mask)
-
-        match_labels = np.hstack([v.semantic_label for _, v in point_cloud_info.items()])
-        # query_mask
-
-        visible_pts_labels = [query_mask[p2D[phi][1][candidate_match_mask[phi]],
-        p2D[phi][0][candidate_match_mask[phi]]]
-                              for phi in range(n_angles)]
-
-        # TODO: Action items:
-        # 1. Aggiungere 4-th dim, confronto con loop solution
-        # 2. Check visibilità angoli
-        # 3. Calcolare il semantic score
-        # 3. Aggiungere le distorsioni
-        # -1. Compilare il .py
-        # endregion
+        # # region Refactoring
+        # n_angles = 360
+        #
+        # p3D, p2D, ctr_array = compute_projections_old(X_coords, R, z0, g_direction, x_dir, point_cloud_info,
+        #                                               camera_internals, dist_coefs, n_angles=n_angles)
+        # visibility_mask = compute_visibility_mask(p3D, ctr_array, point_cloud_info)
+        #
+        # p2D = np.rint(p2D).astype(np.int32)  # TODO: vediamo se con int32 o int64 va più veloce
+        #
+        # # Verify which point projections fall into the image
+        # img_plane_mask = np.logical_and(p2D > np.zeros_like(p2D),
+        #                                 p2D < np.array([width, height])[None, :, None]
+        #                                 ).all(axis=1)
+        #
+        # candidate_match_mask = np.logical_and(visibility_mask, img_plane_mask)
+        #
+        # match_labels = np.hstack([v.semantic_label for _, v in point_cloud_info.items()])
+        # # query_mask
+        #
+        # visible_pts_labels = [query_mask[p2D[phi][1][candidate_match_mask[phi]],
+        # p2D[phi][0][candidate_match_mask[phi]]]
+        #                       for phi in range(n_angles)]
+        #
+        # # endregion
 
         while phi < 360:
             C = np.array(
@@ -653,13 +639,8 @@ def GSMC_score(p2Dj, p3D_id, point_cloud_info, g_direction, camera_internals, di
                 tvec = - rotmat.dot(C)
                 rvec = cv.Rodrigues(rotmat)[0]
 
-                #
-                #   from scipy. .. import distance_matrix
-                #
-                #   distance_matrix(v1, v2)
-
-                score = project_point_cloud(rvec, tvec, camera_internals, point_cloud_info, project_points_ids,
-                                            query_mask, distortion_coefs=dist_coefs)
+                score = project_point_cloud( rvec, tvec, camera_internals, point_cloud_info, project_points_ids,
+                                             query_mask, distortion_coefs = dist_coefs )
 
                 if score > bestScore:
                     bestScore = score
@@ -676,30 +657,32 @@ def GSMC_score(p2Dj, p3D_id, point_cloud_info, g_direction, camera_internals, di
     return bestScore, bestC, bestR, tot_points_count, bestPointIds
 
 
-def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g_direction, camera_internals,
-                             dist_coefs, query_mask, n_angles=360, c_gt=None, R_gt=None):
-    n_matches = match_pts_2d.shape[0]  # 1078
+def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, match_pts_3d_idxs, point_cloud_info, p3D, z0, g_direction, camera_internals,
+                              dist_coefs, query_mask, n_angles = 360):
+    n_matches = match_pts_2d.shape[ 0 ]  # n_matches
 
-    p3D = np.stack([v.xyz for _, v in point_cloud_info.items()], axis=-1)
+    # p3D = np.stack([v.xyz for _, v in point_cloud_info.items()], axis=-1)
 
     # device = torch.device( "cuda:0" if torch.cuda.is_available() else "cpu" )
     device = "cuda"
     print(f'Torch is using device: {device}')
 
-    # Convertiamo in torch
-    match_pts_2d = torch.from_numpy(match_pts_2d).to(device=device, dtype=torch.float32)
-    match_pts_3d = torch.from_numpy(match_pts_3d).to(device=device, dtype=torch.float32)
-    camera_internals = torch.from_numpy(camera_internals).to(device=device, dtype=torch.float32)
-    dist_coefs = torch.from_numpy(dist_coefs).to(device=device, dtype=torch.float32)
-    g_direction = torch.from_numpy(g_direction).to(device=device, dtype=torch.float32)
-    p3D = torch.from_numpy(p3D).to(device=device, dtype=torch.float32)
+    # Convert inputs to torch objs
+    match_pts_2d = torch.from_numpy( match_pts_2d ).to( device = device, dtype = torch.float32 )
+    match_pts_3d = torch.from_numpy( match_pts_3d ).to( device = device, dtype = torch.float32 )
+    camera_internals = torch.from_numpy( camera_internals ).to( device = device, dtype = torch.float32 )
+    dist_coefs = torch.from_numpy( dist_coefs ).to( device = device, dtype = torch.float32 )
+    g_direction = torch.from_numpy( g_direction ).to( device = device, dtype = torch.float32 )
+    p3D = torch.from_numpy( p3D ).to( device = device, dtype = torch.float32 )
+    match_pts_3d_idxs = torch.from_numpy( match_pts_3d_idxs[ :, None ] ).to( device = device, dtype = torch.int32 )
+    # match_pts_3d_idxs = match_pts_3d_idxs.repeat( n_angles, 1 )
 
-    match_pts_2d_h = to_homogeneous_torch(match_pts_2d, coord_axis=-1, device=device)  # (1078, 3)
-    match_pts_2d_h = match_pts_2d_h @ torch.linalg.inv(camera_internals).T  # (1078, 3) @ (3, 3) = (1078, 3)
-    match_pts_2d_h = match_pts_2d_h / torch.linalg.norm(match_pts_2d_h, dim=-1)[:, None]
+    match_pts_2d_h = to_homogeneous_torch( match_pts_2d, coord_axis = -1, device = device )  # (n_matches, 3)
+    match_pts_2d_h = match_pts_2d_h @ torch.linalg.inv( camera_internals ).T  # (n_matches, 3) @ (3, 3) = (n_matches, 3)
+    match_pts_2d_h = match_pts_2d_h / torch.linalg.norm( match_pts_2d_h, dim = -1 )[ :, None ]
 
-    alpha = torch.arccos(match_pts_2d_h @ g_direction) - math.pi / 2  # (1078, 3) @ (3, 1) = (1078, 1)
-    R = torch.abs(match_pts_3d[:, 2] - z0) / torch.abs(torch.tan(alpha))
+    alpha = torch.arccos( match_pts_2d_h @ g_direction ) - math.pi / 2  # (n_matches, 3) @ (3, 1) = (n_matches, 1)
+    R = torch.abs( match_pts_3d[ :, 2 ] - z0 ) / torch.abs( torch.tan( alpha ) )
 
     phi = torch.arange(n_angles, device=device)
 
@@ -710,13 +693,9 @@ def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g
     ctr_z = torch.full(ctr_x.shape, z0, device=device)
     ctr = torch.stack([ctr_x, ctr_y, ctr_z], dim=-1)
 
-    rotmat_nd = get_rotation_matrix_nd_torch(g_direction, match_pts_2d_h.T,
-                                             torch.movedim(ctr, (0, 1, 2), (2, 1, 0)),  # ctr.T,
-                                             match_pts_3d.T, device=device)
-    # rotmat_nd = torch.swapaxes(rotmat_nd, 0, 1)
-
-    # rotmat_nd = torch.swapaxes( get_rotation_matrix_nd( g_direction, match_pts_2d.T, ctr.T, match_pts_3d.T), 0, 1 )  # (360, 1078, 3, 3)
-    # rotmat_nd = torch.ones( (1078, 360,  3, 3), device=device)
+    rotmat_nd = get_rotation_matrix_nd_torch( g_direction, match_pts_2d_h.T,
+                                              torch.movedim( ctr, (0, 1, 2), (2, 1, 0) ),  # ctr.T,
+                                              match_pts_3d.T, device = device )
 
     tvec_nd = - torch.sum(rotmat_nd * ctr[:, :, None], dim=-1)
 
@@ -724,17 +703,22 @@ def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g
 
     # p3D_h = to_homogeneous_torch( p3D, coord_axis = 0, device = device )  # (4, 92916)
 
-    rt_matrix_flat = torch.reshape(rt_matrix, (rt_matrix.shape[0] * rt_matrix.shape[1],
-                                               rt_matrix.shape[2],
-                                               rt_matrix.shape[3]))
-    ctr_flat = torch.reshape(ctr, (rt_matrix.shape[0] * rt_matrix.shape[1],
-                                   ctr.shape[2],
-                                   1
-                                   ))
+    rt_matrix_flat = torch.reshape( rt_matrix, (n_matches * n_angles,
+                                                rt_matrix.shape[ 2 ],  # 3
+                                                rt_matrix.shape[ 3 ]) )  # 4
+    ctr_flat = torch.reshape( ctr, (n_matches * n_angles,
+                                    ctr.shape[ 2 ],
+                                    1
+                                    ) )
+    match_pts_3d_idxs_flat = match_pts_3d_idxs.repeat(1, n_angles).flatten()
 
-    num_semantic_inliers = torch.zeros(rt_matrix.shape[0] * rt_matrix.shape[1], device=device)  # (bs, 1)
+    # match_p3d_idxs_flat = torch.reshape( match_pts_3d_idxs, (n_matches*n_angles) )
 
-    del ctr_x, ctr_y, ctr_z, ctr, rt_matrix, rotmat_nd, tvec_nd  # TODO: delete all useless tensor from now on
+    num_semantic_inliers = torch.zeros( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device )  # (bs, 1)
+    num_projected_pts = torch.zeros( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device )
+    is_matched_p3d_visible = np.ones_like( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device, dtype = bool )
+
+    del ctr_x, ctr_y, ctr_z, ctr, rt_matrix, rotmat_nd, tvec_nd, match_pts_3d_idxs  # TODO: delete all useless tensor from now on
     torch.cuda.empty_cache()
 
     thr_d_low, thr_d_up, mid_camera_directions, thr_cos_angle = get_visibility_thresholds_torch(point_cloud_info,
@@ -745,64 +729,111 @@ def compute_gsmc_score_torch(match_pts_2d, match_pts_3d, point_cloud_info, z0, g
                              device=device, dtype=torch.int32)
     query_mask = torch.from_numpy(query_mask).to(device)
 
-    print('Start')
+    print( 'gsmc@compute_gsmc_score_torch: start processing scores' )
     start_time = time.time()
 
-    batch_size = 2048  # 3072  # 2048  # 4100  # 2048
-    tensor_dataset = torch.utils.data.TensorDataset(rt_matrix_flat.to('cpu', non_blocking=True),
-                                                    ctr_flat.to('cpu', non_blocking=True))
-    rtc_dataloader = DataLoader(tensor_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    # batch_size = 6000  # 3072  # 2048  # 4100  # 2048
+    batch_size = 15 * n_angles  # Note: the batch_size must be divisible by n_angles  # 16,
+    n_batches = math.ceil( rt_matrix_flat.shape[ 0 ] / batch_size )
+    tensor_dataset = torch.utils.data.TensorDataset( rt_matrix_flat.to( 'cpu', non_blocking = True ),
+                                                     ctr_flat.to( 'cpu', non_blocking = True ),
+                                                     match_pts_3d_idxs_flat.to( 'cpu', non_blocking = True ))
+    rtc_dataloader = DataLoader( tensor_dataset, batch_size = batch_size, shuffle = False,
+                                 # num_workers=4, pin_memory=True)
+                                 num_workers = 0, pin_memory = False )
+    rtc_iter = iter( rtc_dataloader )
 
-    for curr_idx, (curr_rt, curr_ctr) in enumerate(rtc_dataloader):
-        curr_rt = curr_rt.to('cuda', non_blocking=True)
-        curr_ctr = curr_ctr.to('cuda', non_blocking=True)
-        analyse_images_torch(batch_size, camera_internals, dist_coefs, mid_camera_directions,
-                             num_semantic_inliers, p3D, pc_labels, query_mask, curr_rt, curr_ctr, curr_idx, thr_cos_angle,
-                             thr_d_low, thr_d_up, device, width, height)
+    # for curr_idx, (curr_rt, curr_ctr) in enumerate(rtc_dataloader):
+
+    for curr_idx in range( n_batches ):
+    # for curr_idx in tqdm(range(n_batches), desc='Compute scores'):
+        curr_rt, curr_ctr, curr_match_idxs = next( rtc_iter )
+
+        curr_rt = curr_rt.to( 'cuda', non_blocking = True )
+        curr_ctr = curr_ctr.to( 'cuda', non_blocking = True )
+        curr_match_idxs = curr_match_idxs.to( 'cuda', non_blocking = True )
+        analyse_images_torch( batch_size, camera_internals, dist_coefs, mid_camera_directions, num_semantic_inliers,
+                              num_projected_pts, curr_match_idxs, is_matched_p3d_visible, p3D, pc_labels, query_mask, curr_rt, curr_ctr, curr_idx, thr_cos_angle,
+                              thr_d_low, thr_d_up, device, width, height, n_angles = n_angles )
 
     print(f'Duration: {time.time() - start_time}')
 
-    exit(0)  # TODO: delete line
+    num_semantic_inliers = num_semantic_inliers.reshape( (n_matches, n_angles) )
+    # num_projected_pts = num_projected_pts.reshape((n_matches, n_angles))
+
+    scores, best_ids = torch.max( num_semantic_inliers, dim = 1 )
+
+    # best_ids = torch.stack( [torch.arange(n_matches, device=device), best_ids], dim = 1 )
+    best_ids_flat = n_angles * torch.arange( n_matches, device = device ) + best_ids
+
+    assert not torch.any(torch.isnan(num_projected_pts[ best_ids_flat ]))
+
+    return scores.cpu().numpy(), ctr_flat[ best_ids_flat ].cpu().numpy(), rt_matrix_flat[ best_ids_flat ].cpu().numpy(), \
+           num_projected_pts[ best_ids_flat ].cpu().numpy(), is_matched_p3d_visible[ best_ids_flat ].cpu().numpy()  # we deliberately do not return the projected pts ids for speed
 
 
 @torch.jit.script
-def analyse_images_torch(batch_size:int, camera_internals, dist_coefs, mid_camera_directions,
-                         num_semantic_inliers, p3D, pc_labels, query_mask, curr_rt, curr_ctr, curr_idx:int, thr_cos_angle,
-                         thr_d_low, thr_d_up, device: str = 'cuda', width:int=1024, height:int=768):
+def analyse_images_torch( batch_size: int, camera_internals, dist_coefs, mid_camera_directions, num_semantic_inliers,
+                          num_projected_pts, curr_match_idxs, is_matched_p3d_visible, p3D, pc_labels, query_mask, curr_rt, curr_ctr, curr_idx: int,
+                          thr_cos_angle, thr_d_low, thr_d_up, device: str = 'cuda', width: int = 1024,
+                          height: int = 768, n_angles: int = 360 ):
 
-    p2D_curr = compute_projections_torch(curr_rt, p3D, camera_internals, dist_coefs, device)
-    # p2D_h_curr = camera_internals @ curr_rt @ p3D_h  # (3, 3) @ (bs, 3, 4) @ (4, 92916) = (bs, 3, 92916)
+    # region Filter points that are visible from the given match
+    ctr_1 = curr_ctr[ ::n_angles, :2, : ]
+    match_pts_3d_xy = p3D[:, curr_match_idxs.unique()]
 
-    visibility_mask = compute_visibility_mask_torch(p3D, curr_ctr, thr_d_low, thr_d_up, mid_camera_directions,
-                                                    thr_cos_angle)
+    r_square = torch.sum(torch.square(ctr_1 - match_pts_3d_xy), dim = 1)
+    dists_square = torch.sum(torch.square(p3D[ :2 ][ None ] - match_pts_3d_xy), dim = 1) # TODO there is some error here, min dists are in the order of 1(m)
+    mask = dists_square < r_square
+    mask = torch.any( mask, dim = 0 )
+
+    p3D = p3D[:, mask]
+    thr_d_low = thr_d_low[mask]
+    thr_d_up = thr_d_up[mask]
+    thr_cos_angle = thr_cos_angle[mask]
+    mid_camera_directions = mid_camera_directions[:, mask]
+    pc_labels = pc_labels[mask]
+    # endregion
+
+    p2D_curr = compute_projections_torch( curr_rt, p3D, camera_internals, dist_coefs, device )
+    # p2D_h_curr = camera_internals @ curr_rt @ p3D_h  # (3, 3) @ (bs, 3, 4) @ (4, n_points) = (bs, 3, n_points)
+
+    visibility_mask = compute_visibility_mask_torch( p3D, curr_ctr, thr_d_low, thr_d_up, mid_camera_directions,
+                                                     thr_cos_angle )
+
+    is_matched_p3d_visible[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = visibility_mask[ curr_match_idxs ]
+
+    # (bs, n_points)
     # , device,
     #                                             curr_rt, c_gt, R_gt)
     # p2D_curr = p2D_curr  # .long()
 
     # start_time_in = time.time()
 
-    img_plane_mask = torch.logical_and(p2D_curr >= 0,
-                                       p2D_curr < torch.tensor([width, height],
-                                                               device=device,
-                                                               dtype=torch.float32)[None, :, None]
-                                       ).all(dim=1)
-    # visibility_mask = torch.ones_like(img_plane_mask)
+    img_plane_mask = torch.logical_and( p2D_curr >= 0,
+                                        p2D_curr < torch.tensor( [ width, height ],
+                                                                 device = device,
+                                                                 dtype = torch.float32 )[ None, :, None ]
+                                        ).all( dim = 1 )
 
     candidate_match_mask = torch.logical_and(visibility_mask, img_plane_mask)
 
     # query_mask
 
-    candidate_match_mask = torch.where(candidate_match_mask)
-    pid_mask = candidate_match_mask[1]
+    candidate_match_mask = torch.where( candidate_match_mask )
+    pid_mask = candidate_match_mask[ 1 ]
     center_mask = candidate_match_mask[ 0 ]
     pc_labels_curr = pc_labels[ pid_mask ]
 
-    visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ].int()
-    visible_pts_labels = query_mask[visible_pts_coords[:, 1], visible_pts_coords[:, 0]]
+    visible_pts_coords = p2D_curr[ center_mask, :, pid_mask ].long()
+    visible_pts_labels = query_mask[ visible_pts_coords[ :, 1 ], visible_pts_coords[ :, 0 ] ]
 
     equal_labels = (pc_labels_curr == visible_pts_labels)
 
-    scores = torch.bincount( center_mask, weights = equal_labels, minlength = curr_rt.shape[0] )
+    num_semantic_inliers_curr = torch.bincount( center_mask, weights = equal_labels, minlength = curr_rt.shape[ 0 ] )
+    num_visible_pts_curr = visibility_mask.sum( dim = 1 )
 
-    num_semantic_inliers[curr_idx * batch_size: (curr_idx + 1) * batch_size] = scores  # <-- stellina
+    num_semantic_inliers[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = num_semantic_inliers_curr
+    num_projected_pts[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = num_visible_pts_curr
 
+    assert not torch.any( torch.isnan( num_semantic_inliers_curr ) )

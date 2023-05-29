@@ -328,10 +328,10 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
         # any additional masks for other matching strategies
         # endregion
 
-        scores, bestCs, bestRs, totPointCounts = compute_gsmc_score_torch( match_pts_2d, match_pts_3d, full3Dpoints,
-                                                                           all_p3D, z0, g_direction, camera_matrix,
-                                                                           dist_coefs, query_mask,
-                                                                           n_angles = 180)
+        scores, bestCs, bestRs, totPointCounts, p3d_visib_mask = compute_gsmc_score_torch( match_pts_2d, match_pts_3d, match_pts_3d_idxs, full3Dpoints,
+                                                                                           all_p3D, z0, g_direction, camera_matrix,
+                                                                                           dist_coefs, query_mask,
+                                                                                           n_angles = 180 )
 
         ratios = np.divide( scores, totPointCounts, out=np.zeros_like(scores),
                             where = totPointCounts > 0 )  # sets to 0 where totPointCounts is zero
@@ -347,13 +347,14 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
         smc_mask = (match_lab_3d == all_neighboring_labels).any(axis=1)
 
         sm_thresh = 0.2
-        match_sm_thresh_mask = (ratios > sm_thresh) & smc_mask
+        match_sm_thresh_mask = (ratios > sm_thresh) & smc_mask & p3d_visib_mask
 
         best_ratios_ids = np.argmax( ratios.reshape( (-1, k) ), axis = 1 ) + k * np.arange( n_qkp )
         match_sm_best_mask = np.zeros_like( match_sm_thresh_mask )
         match_sm_best_mask[ best_ratios_ids ] = True
         # adding absolute threshold on top
         match_sm_best_mask[ ratios < sm_thresh ] = False
+        match_sm_best_mask = match_sm_best_mask & p3d_visib_mask
 
 
         # endregion
