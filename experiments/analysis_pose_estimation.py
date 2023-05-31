@@ -245,7 +245,7 @@ def estimate_pose( match_pts_2d, match_pts_3d, sampling_weights, internals, dist
         position_err, rotation_err = compute_pose_errors( R_gt, R_est, c_gt, c_est )
         n_inliers = sum( inliers )
 
-    return [ success, position_err, rotation_err, n_inliers ]
+    return [ int(success), float(position_err), float(rotation_err), int(n_inliers) ]
 
 
 def save_exp_results( query_name, experiment_type, k, ratio_threshold, matches_in, pose_results, exp_name ):
@@ -299,10 +299,10 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
 
         # endregion
 
-        # region fast debugging only
-        qkp = qkp[:30]
-        q_descriptors = q_descriptors[:30]
-        # endregion
+        # # region fast debugging only
+        # qkp = qkp[:30]
+        # q_descriptors = q_descriptors[:30]
+        # # endregion
 
         n_qkp = qkp.shape[ 0 ]
 
@@ -340,21 +340,24 @@ def get_stats(query_names, k, slicepath, slice, savepath, ratio_threshold=0.2, h
         # 0. add two base checks: ssmc + visibilitymc
         # pad_query_mask = np.pad( query_mask, smc_window_size, 'constant', constant_values = -1 )
 
-        match_px_2d_inf = np.clip( match_pts_2d - smc_window_size, a_min = 0, a_max = np.inf  ).astype(int)
-        match_px_2d_sup = np.stack( [ np.clip( match_pts_2d[ :,0] + smc_window_size, a_min = -np.inf, a_max = height ), np.clip( match_pts_2d[:, 1] + smc_window_size, a_min = -np.inf, a_max = width )], axis = 1 ).astype(int)
-        all_neighboring_labels = query_mask[ match_px_2d_inf[:, 1]:match_px_2d_sup[:, 1], match_px_2d_inf[:, 0]:match_px_2d_sup[:, 0] ]
+        match_px_2d = match_pts_2d.astype(int)
+        all_neighboring_labels = np.lib.stride_tricks.sliding_window_view(
+                np.pad(query_mask, smc_window_size, 'constant', constant_values= -1),
+                writeable = False,
+                window_shape = (smc_window_size, smc_window_size)
+            )[match_px_2d[:, 1], match_px_2d[:, 0]].reshape( (-1, smc_window_size*smc_window_size) )
         match_lab_3d = all_3d_sem_labels[ matches_ids[ :, 1 ] ][:,None]
         smc_mask = (match_lab_3d == all_neighboring_labels).any(axis=1)
 
         sm_thresh = 0.2
-        match_sm_thresh_mask = (ratios > sm_thresh) & smc_mask & p3d_visib_mask
+        match_sm_thresh_mask = np.logical_and((ratios > sm_thresh), np.logical_and(smc_mask, p3d_visib_mask))
 
         best_ratios_ids = np.argmax( ratios.reshape( (-1, k) ), axis = 1 ) + k * np.arange( n_qkp )
         match_sm_best_mask = np.zeros_like( match_sm_thresh_mask )
         match_sm_best_mask[ best_ratios_ids ] = True
         # adding absolute threshold on top
         match_sm_best_mask[ ratios < sm_thresh ] = False
-        match_sm_best_mask = match_sm_best_mask & p3d_visib_mask
+        match_sm_best_mask = np.logical_and(match_sm_best_mask, p3d_visib_mask)
 
 
         # endregion

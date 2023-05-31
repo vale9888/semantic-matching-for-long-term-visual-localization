@@ -716,7 +716,7 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, match_pts_3d_idxs, poi
 
     num_semantic_inliers = torch.zeros( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device )  # (bs, 1)
     num_projected_pts = torch.zeros( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device )
-    is_matched_p3d_visible = np.ones_like( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device, dtype = bool )
+    is_matched_p3d_visible = torch.ones( rt_matrix.shape[ 0 ] * rt_matrix.shape[ 1 ], device = device )
 
     del ctr_x, ctr_y, ctr_z, ctr, rt_matrix, rotmat_nd, tvec_nd, match_pts_3d_idxs  # TODO: delete all useless tensor from now on
     torch.cuda.empty_cache()
@@ -739,14 +739,14 @@ def compute_gsmc_score_torch( match_pts_2d, match_pts_3d, match_pts_3d_idxs, poi
                                                      ctr_flat.to( 'cpu', non_blocking = True ),
                                                      match_pts_3d_idxs_flat.to( 'cpu', non_blocking = True ))
     rtc_dataloader = DataLoader( tensor_dataset, batch_size = batch_size, shuffle = False,
-                                 # num_workers=4, pin_memory=True)
-                                 num_workers = 0, pin_memory = False )
+                                 num_workers=4, pin_memory=True)
+                                 # num_workers = 0, pin_memory = False )
     rtc_iter = iter( rtc_dataloader )
 
     # for curr_idx, (curr_rt, curr_ctr) in enumerate(rtc_dataloader):
 
-    for curr_idx in range( n_batches ):
-    # for curr_idx in tqdm(range(n_batches), desc='Compute scores'):
+    # for curr_idx in range( n_batches ):
+    for curr_idx in tqdm(range(n_batches), desc='Compute scores'):
         curr_rt, curr_ctr, curr_match_idxs = next( rtc_iter )
 
         curr_rt = curr_rt.to( 'cuda', non_blocking = True )
@@ -780,7 +780,7 @@ def analyse_images_torch( batch_size: int, camera_internals, dist_coefs, mid_cam
 
     # region Filter points that are visible from the given match
     ctr_1 = curr_ctr[ ::n_angles, :2, : ]
-    match_pts_3d_xy = p3D[:, curr_match_idxs.unique()]
+    match_pts_3d_xy = (p3D[:2, curr_match_idxs.long()[::n_angles]].T)[:, :, None]
 
     r_square = torch.sum(torch.square(ctr_1 - match_pts_3d_xy), dim = 1)
     dists_square = torch.sum(torch.square(p3D[ :2 ][ None ] - match_pts_3d_xy), dim = 1) # TODO there is some error here, min dists are in the order of 1(m)
@@ -800,8 +800,6 @@ def analyse_images_torch( batch_size: int, camera_internals, dist_coefs, mid_cam
 
     visibility_mask = compute_visibility_mask_torch( p3D, curr_ctr, thr_d_low, thr_d_up, mid_camera_directions,
                                                      thr_cos_angle )
-
-    is_matched_p3d_visible[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = visibility_mask[ curr_match_idxs ]
 
     # (bs, n_points)
     # , device,
@@ -835,5 +833,7 @@ def analyse_images_torch( batch_size: int, camera_internals, dist_coefs, mid_cam
 
     num_semantic_inliers[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = num_semantic_inliers_curr
     num_projected_pts[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = num_visible_pts_curr
+    # is_matched_p3d_visible[ curr_idx * batch_size: (curr_idx + 1) * batch_size ] = torch.where(visibility_mask[ torch.arange( len(curr_match_idxs) ), curr_match_idxs.long() ], 1, 0)
 
-    assert not torch.any( torch.isnan( num_semantic_inliers_curr ) )
+
+    # assert not torch.any( torch.isnan( num_semantic_inliers_curr ) )
