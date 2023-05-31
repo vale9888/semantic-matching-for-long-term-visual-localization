@@ -517,5 +517,5 @@ def exp2( dry_run=True ):
 
 
 if __name__ == '__main__':
-    # exp2( dry_run = False )
-    exp1()
+    exp2( dry_run = False )
+    # exp1()
